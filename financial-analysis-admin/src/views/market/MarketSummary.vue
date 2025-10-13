@@ -32,8 +32,15 @@
         </el-form-item>
       </el-form>
 
-      <!-- small date grid -->
-      <div class="date-grid">
+          <!-- date navigator: prev / next / today -->
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <el-button size="mini" @click="prevDates">上一组</el-button>
+            <el-button size="mini" @click="centerToday">回到今天</el-button>
+            <el-button size="mini" @click="nextDates">下一组</el-button>
+          </div>
+
+          <!-- small date grid (horizontal, scrollable) -->
+          <div class="date-grid" ref="dateGridRef">
         <div v-for="d in dateGrid" :key="d" class="date-cell"
           :class="{
             'future': isFuture(d),
@@ -84,6 +91,10 @@ const summaryData = ref<any[]>([])
 const loading = ref(false)
 const tradeDates = ref<Set<string>>(new Set())
 const emptyText = ref('请选择日期进行查询')
+// date window for sliding navigator
+const windowSize = ref(20) // number of days shown in the grid
+const windowOffset = ref(0) // offset in days from today (negative means earlier)
+const dateGridRef = ref<HTMLElement | null>(null)
 
 const isHoliday = computed(() => !!(queryDate.value && summaryDataHoliday.value))
 const formattedActualDate = computed(() => actualDate.value ? dayjs(actualDate.value, 'YYYYMMDD').format('YYYY-MM-DD') : '')
@@ -200,9 +211,21 @@ onMounted(() => {
   fetchTradeDates()
 })
 
-// --- 小日期网格数据与行为（用于标注未来/今日/休市）
-const gridStart = computed(() => dayjs().subtract(15, 'day'))
-const gridEnd = computed(() => dayjs().add(7, 'day'))
+const centerToday = () => {
+  windowOffset.value = 0
+}
+
+const prevDates = () => {
+  windowOffset.value -= windowSize.value
+}
+
+const nextDates = () => {
+  windowOffset.value += windowSize.value
+}
+
+// recompute dateGrid to be a sliding window centered at today + offset
+const gridStart = computed(() => dayjs().add(windowOffset.value, 'day').subtract(Math.floor(windowSize.value / 2), 'day'))
+const gridEnd = computed(() => dayjs().add(windowOffset.value, 'day').add(Math.ceil(windowSize.value / 2) - 1, 'day'))
 const dateGrid = computed(() => {
   const arr: string[] = []
   let ptr = gridStart.value
@@ -212,6 +235,8 @@ const dateGrid = computed(() => {
   }
   return arr
 })
+
+// (dateGrid is computed above as a sliding window)
 
 const isFuture = (d: string) => d > dayjs().format('YYYYMMDD')
 const isTodayStr = (d: string) => d === dayjs().format('YYYYMMDD')
@@ -225,8 +250,11 @@ const onGridDateClick = (d: string) => {
     ElMessage.info(`${dayjs(d, 'YYYYMMDD').format('YYYY-MM-DD')} 还未开市`)
     return
   }
-  // 若为休市（tradeDates 不包含），不可选
-  if (!tradeDates.value.has(d)) return
+  // 若为休市（tradeDates 不包含），提示休市信息
+  if (!tradeDates.value.has(d)) {
+    ElMessage.info(`${dayjs(d, 'YYYYMMDD').format('YYYY-MM-DD')} 休市`)
+    return
+  }
   queryDate.value = d
   fetchSummaryData()
 }
@@ -252,12 +280,15 @@ const onGridDateClick = (d: string) => {
 
 .date-grid {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   margin: 12px 0 18px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
 }
 .date-cell {
-  width: 46px;
+  width: 64px;
   height: 36px;
   display:flex;
   align-items:center;
