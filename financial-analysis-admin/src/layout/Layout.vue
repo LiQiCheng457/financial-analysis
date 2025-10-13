@@ -2,17 +2,70 @@
   <el-container class="layout-container">
     <el-aside width="200px">
       <el-scrollbar>
-        <el-menu :default-openeds="['1']" router>
+        <el-menu :default-openeds="['market']" router>
           <el-menu-item index="/">
             <el-icon><HomeFilled /></el-icon>
             <span>主页</span>
           </el-menu-item>
-          <el-sub-menu index="1">
+
+          <!-- 行情中心 -->
+          <el-sub-menu index="market">
             <template #title>
-              <el-icon><TrendCharts /></el-icon>数据分析
+              <el-icon><Document /></el-icon>行情中心
             </template>
-            <el-menu-item index="/market-summary">每日概况</el-menu-item>
-            <el-menu-item index="/stock-history">历史行情数据</el-menu-item>
+            <el-menu-item index="/market/summary">每日概况</el-menu-item>
+            <el-menu-item index="/market/history">历史行情数据</el-menu-item>
+            <el-menu-item index="/market/kline">K线图</el-menu-item>
+            <el-menu-item index="/market/timeseries">分时图</el-menu-item>
+            <el-menu-item index="/market/snapshot">个股快照</el-menu-item>
+          </el-sub-menu>
+
+          <!-- 自选股 -->
+          <el-sub-menu index="watchlist">
+            <template #title>
+              <el-icon><Bell /></el-icon>自选股
+            </template>
+            <el-menu-item index="/watchlist/crud">增删改查</el-menu-item>
+            <el-menu-item index="/watchlist/groups">分组管理</el-menu-item>
+            <el-menu-item index="/watchlist/alerts">涨跌提醒</el-menu-item>
+          </el-sub-menu>
+
+          <!-- 选股器 -->
+          <el-sub-menu index="picker">
+            <template #title>
+              <el-icon><Document /></el-icon>选股器
+            </template>
+            <el-menu-item index="/picker/filter">条件筛选</el-menu-item>
+            <el-menu-item index="/picker/backtest">策略回测</el-menu-item>
+            <el-menu-item index="/picker/hot">热门策略</el-menu-item>
+          </el-sub-menu>
+
+          <!-- 财务分析 -->
+          <el-sub-menu index="finance">
+            <template #title>
+              <el-icon><Document /></el-icon>财务分析
+            </template>
+            <el-menu-item index="/finance/reports">财务报表</el-menu-item>
+            <el-menu-item index="/finance/metrics">关键指标</el-menu-item>
+            <el-menu-item index="/finance/peer">同业对比</el-menu-item>
+          </el-sub-menu>
+
+          <!-- 新闻报告 -->
+          <el-sub-menu index="news">
+            <template #title>
+              <el-icon><Document /></el-icon>新闻报告
+            </template>
+            <el-menu-item index="/news/realtime">实时新闻</el-menu-item>
+            <el-menu-item index="/news/announcements">公司公告</el-menu-item>
+          </el-sub-menu>
+
+          <!-- 用户系统 -->
+          <el-sub-menu index="user">
+            <template #title>
+              <el-icon><User /></el-icon>用户系统
+            </template>
+            <el-menu-item index="/user/profile">个人中心</el-menu-item>
+            <el-menu-item index="/user/permissions">权限管理</el-menu-item>
           </el-sub-menu>
         </el-menu>
       </el-scrollbar>
@@ -45,7 +98,7 @@
 
 <script lang="ts" setup>
 import { computed, onMounted } from 'vue'
-import { HomeFilled, TrendCharts, Setting } from '@element-plus/icons-vue'
+import { HomeFilled, Setting, Document, Bell, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'vue-router'
 import UserAvatar from '@/components/UserAvatar.vue'
