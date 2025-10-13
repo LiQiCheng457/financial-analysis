@@ -7,6 +7,27 @@ import { useAuthStore } from '@/store/auth'
 import StockHistory from '@/views/stock/StockHistory.vue'
 
 import MarketSummary from '@/views/market/MarketSummary.vue'
+import KLine from '@/views/market/KLine.vue'
+import TimeSeries from '@/views/market/TimeSeries.vue'
+import Snapshot from '@/views/market/Snapshot.vue'
+
+import WatchlistCrud from '@/views/watchlist/Crud.vue'
+import WatchlistGroups from '@/views/watchlist/Groups.vue'
+import WatchlistAlerts from '@/views/watchlist/Alerts.vue'
+
+import PickerFilter from '@/views/picker/Filter.vue'
+import PickerBacktest from '@/views/picker/Backtest.vue'
+import PickerHot from '@/views/picker/Hot.vue'
+
+import FinanceReports from '@/views/finance/Reports.vue'
+import FinanceMetrics from '@/views/finance/Metrics.vue'
+import FinancePeer from '@/views/finance/Peer.vue'
+
+import NewsRealtime from '@/views/news/Realtime.vue'
+import NewsAnnouncements from '@/views/news/Announcements.vue'
+
+import UserProfile from '@/views/user/Profile.vue'
+import UserPermissions from '@/views/user/Permissions.vue'
 
 const routes = [
   {
@@ -29,6 +50,28 @@ const routes = [
         name: 'market-summary',
         component: MarketSummary,
       }
+      ,
+      { path: 'market/kline', name: 'market-kline', component: KLine },
+      { path: 'market/timeseries', name: 'market-timeseries', component: TimeSeries },
+      { path: 'market/snapshot', name: 'market-snapshot', component: Snapshot },
+
+      { path: 'watchlist/crud', name: 'watchlist-crud', component: WatchlistCrud },
+      { path: 'watchlist/groups', name: 'watchlist-groups', component: WatchlistGroups },
+      { path: 'watchlist/alerts', name: 'watchlist-alerts', component: WatchlistAlerts },
+
+      { path: 'picker/filter', name: 'picker-filter', component: PickerFilter },
+      { path: 'picker/backtest', name: 'picker-backtest', component: PickerBacktest },
+      { path: 'picker/hot', name: 'picker-hot', component: PickerHot },
+
+      { path: 'finance/reports', name: 'finance-reports', component: FinanceReports },
+      { path: 'finance/metrics', name: 'finance-metrics', component: FinanceMetrics },
+      { path: 'finance/peer', name: 'finance-peer', component: FinancePeer },
+
+      { path: 'news/realtime', name: 'news-realtime', component: NewsRealtime },
+      { path: 'news/announcements', name: 'news-announcements', component: NewsAnnouncements },
+
+      { path: 'user/profile', name: 'user-profile', component: UserProfile },
+      { path: 'user/permissions', name: 'user-permissions', component: UserPermissions },
     ]
   },
   {
@@ -43,7 +86,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
   const isAuthenticated = !!authStore.token
 
