@@ -37,6 +37,10 @@
             <el-button size="mini" @click="prevDates">上一组</el-button>
             <el-button size="mini" @click="centerToday">回到今天</el-button>
             <el-button size="mini" @click="nextDates">下一组</el-button>
+            <div style="margin-left:8px;display:flex;align-items:center;gap:6px">
+              <span style="color:#909399">显示天数</span>
+              <el-input-number :min="7" :max="60" v-model="windowSize" @change="onWindowSizeChange" size="small" />
+            </div>
           </div>
 
           <!-- small date grid (horizontal, scrollable) -->
@@ -79,7 +83,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { getSseDailySummary, getTradeDates } from '@/api/stock'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
@@ -92,9 +96,12 @@ const loading = ref(false)
 const tradeDates = ref<Set<string>>(new Set())
 const emptyText = ref('请选择日期进行查询')
 // date window for sliding navigator
-const windowSize = ref(20) // number of days shown in the grid
+const STORAGE_KEY = 'marketSummary.windowSize'
+const windowSize = ref<number>(20) // number of days shown in the grid
 const windowOffset = ref(0) // offset in days from today (negative means earlier)
 const dateGridRef = ref<HTMLElement | null>(null)
+const CELL_GAP = 6
+const CELL_WIDTH = 64
 
 const isHoliday = computed(() => !!(queryDate.value && summaryDataHoliday.value))
 const formattedActualDate = computed(() => actualDate.value ? dayjs(actualDate.value, 'YYYYMMDD').format('YYYY-MM-DD') : '')
@@ -208,19 +215,62 @@ const fetchSummaryData = async () => {
 }
 
 onMounted(() => {
+  // load persisted window size
+  try {
+    const v = window.localStorage.getItem(STORAGE_KEY)
+    if (v) windowSize.value = Math.max(7, Math.min(60, Number(v)))
+  } catch (e) {}
   fetchTradeDates()
 })
 
 const centerToday = () => {
   windowOffset.value = 0
+  // smooth scroll to center after grid recomputes
+  nextTick(() => scrollToCenter())
 }
 
 const prevDates = () => {
   windowOffset.value -= windowSize.value
+  nextTick(() => smoothScrollBy(-1))
 }
 
 const nextDates = () => {
   windowOffset.value += windowSize.value
+  nextTick(() => smoothScrollBy(1))
+}
+
+// persist windowSize changes
+const onWindowSizeChange = (v: number) => {
+  try { window.localStorage.setItem(STORAGE_KEY, String(v)) } catch(e) {}
+}
+
+// helpers to scroll the dateGrid
+function getGridEl(): HTMLElement | null {
+  return (dateGridRef.value as unknown as HTMLElement) || document.querySelector('.date-grid')
+}
+
+function smoothScrollBy(direction: number) {
+  // direction: ±1 number of windows to move (we already changed offset), smoothly scroll container by approx window width
+  const grid = getGridEl()
+  if (!grid) return
+  const step = (CELL_WIDTH + CELL_GAP) * windowSize.value
+  grid.scrollBy({ left: direction * step, behavior: 'smooth' })
+}
+
+function scrollToCenter() {
+  const grid = getGridEl()
+  if (!grid) return
+  // if a queryDate is set, center it; otherwise center today's middle position
+  const targetDate = queryDate.value || dayjs().format('YYYYMMDD')
+  const idx = dateGrid.value.indexOf(targetDate)
+  if (idx === -1) return
+  const items = grid.querySelectorAll('.date-cell')
+  const item = items[idx] as HTMLElement
+  if (!item) return
+  const containerRect = grid.getBoundingClientRect()
+  const itemRect = item.getBoundingClientRect()
+  const targetScrollLeft = grid.scrollLeft + (itemRect.left - containerRect.left) - (containerRect.width / 2) + (itemRect.width / 2)
+  grid.scrollTo({ left: targetScrollLeft, behavior: 'smooth' })
 }
 
 // recompute dateGrid to be a sliding window centered at today + offset
