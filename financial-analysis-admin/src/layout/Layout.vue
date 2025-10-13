@@ -13,8 +13,8 @@
             <template #title>
               <el-icon><Document /></el-icon>行情中心
             </template>
-            <el-menu-item index="/market/summary">每日概况</el-menu-item>
-            <el-menu-item index="/market/history">历史行情数据</el-menu-item>
+            <el-menu-item index="/market-summary">每日概况</el-menu-item>
+            <el-menu-item index="/stock-history">历史行情数据</el-menu-item>
             <el-menu-item index="/market/kline">K线图</el-menu-item>
             <el-menu-item index="/market/timeseries">分时图</el-menu-item>
             <el-menu-item index="/market/snapshot">个股快照</el-menu-item>
