@@ -32,6 +32,20 @@
         </el-form-item>
       </el-form>
 
+      <!-- small date grid -->
+      <div class="date-grid">
+        <div v-for="d in dateGrid" :key="d" class="date-cell"
+          :class="{
+            'future': isFuture(d),
+            'today': isTodayStr(d),
+            'holiday': !tradeDates.has(d) && !isFuture(d),
+            'selectable': tradeDates.has(d) && !isFuture(d) && !isTodayStr(d)
+          }"
+          @click="onGridDateClick(d)">
+          <div class="date-label">{{ dayjs(d, 'YYYYMMDD').format('MM-DD') }}</div>
+        </div>
+      </div>
+
       <el-table
         v-if="summaryData.length > 0"
         :data="summaryData"
@@ -47,8 +61,11 @@
         <el-table-column prop="主板B" label="主板B" />
         <el-table-column prop="科创板" label="科创板" />
         <el-table-column prop="股票回购" label="股票回购" />
+        
       </el-table>
       <el-empty v-else-if="!loading" :description="emptyText" />
+
+      
 
     </el-card>
   </div>
@@ -85,13 +102,15 @@ const formattedQueryDate = computed(() => queryDate.value ? dayjs(queryDate.valu
 
 const fetchTradeDates = async () => {
   try {
-    const dates = await getTradeDates()
+    const datesResp = await getTradeDates()
+    // normalize: request util returns response.data usually, but be defensive
+    const dates = Array.isArray(datesResp) ? datesResp : (datesResp && datesResp.data) ? datesResp.data : []
     tradeDates.value = new Set(dates)
     // 设置默认查询日期为最近的一个交易日 (不晚于今天)
     if (dates.length > 0) {
       const today = dayjs().format('YYYYMMDD')
-      // 找到最后一个 <= today 的交易日
-      const candidate = dates.slice().reverse().find(d => d <= today) || dates[dates.length - 1]
+      // 找到最后一个 < today 的交易日，避免把今天(未结束)作为默认
+      const candidate = dates.slice().reverse().find((d: string) => d < today) || dates[dates.length - 1]
       queryDate.value = candidate
       fetchSummaryData() // 加载默认数据
     }
@@ -101,33 +120,70 @@ const fetchTradeDates = async () => {
 }
 
 const fetchSummaryData = async () => {
-  if (!queryDate.value) {
+    if (!queryDate.value) {
     ElMessage.warning('请选择查询日期')
+    return
+  }
+  // 处理当天和未来日期：当天提示未结束，未来提示还未开市
+  const today = dayjs().format('YYYYMMDD')
+  if (queryDate.value === today) {
+    ElMessage.info('今日开市未结束，无数据')
+    return
+  }
+  if (queryDate.value > today) {
+    ElMessage.info(`${dayjs(queryDate.value, 'YYYYMMDD').format('YYYY-MM-DD')} 还未开市`)
     return
   }
   loading.value = true
   emptyText.value = '正在加载...'
   try {
-    const res = await getSseDailySummary(queryDate.value)
-    // res expected: { date, data, holiday, message }
+  const res: any = await getSseDailySummary(queryDate.value)
+    // normalize various possible shapes returned by the request util / backend
+    // cases:
+    // - res is an array => treat as payload.data
+    // - res is payload object { date, data, holiday, message }
+    // - res is wrapper { data: payload } (less likely since interceptor returns response.data)
+    let payload: any = null
     if (!res) {
+      payload = null
+    } else if (Array.isArray(res)) {
+      payload = { data: res, date: queryDate.value }
+    } else if (typeof res === 'object') {
+      // if res already looks like the payload (has date/status/holiday or data array), use it
+      if ('date' in res || 'status' in res || 'holiday' in res) {
+        payload = res
+      } else if ('data' in res && Array.isArray(res.data)) {
+        payload = res
+      } else if ('data' in res && typeof res.data === 'object') {
+        // res.data might be the actual payload
+        payload = res.data
+      } else {
+        // fallback: treat object as payload with data possibly absent
+        payload = res
+      }
+    } else {
+      payload = res
+    }
+    
+    if (!payload) {
       ElMessage.error('接口返回异常')
       summaryData.value = []
       summaryDataHoliday.value = false
       actualDate.value = ''
-    } else if (res.holiday) {
-      // holiday: true -> notify and clear data
+    } else if (payload.holiday) {
       summaryData.value = []
       summaryDataHoliday.value = true
-      actualDate.value = res.date
-      emptyText.value = res.message || `${res.date} 为休市日`
+      actualDate.value = payload.date
+      emptyText.value = payload.message || `${payload.date} 为休市日`
       ElMessage.info(emptyText.value)
     } else {
-      summaryData.value = res.data || []
+      summaryData.value = Array.isArray(payload.data) ? payload.data : []
+      // debug log to browser console
+      try { console.log('summaryData set, length=', summaryData.value.length, summaryData.value[0]) } catch(e) {}
       summaryDataHoliday.value = false
-      actualDate.value = res.date
+      actualDate.value = payload.date
       if (!summaryData.value || summaryData.value.length === 0) {
-        emptyText.value = res.message || '暂无数据'
+        emptyText.value = payload.message || '暂无数据'
       }
     }
   } catch (error) {
@@ -143,6 +199,38 @@ const fetchSummaryData = async () => {
 onMounted(() => {
   fetchTradeDates()
 })
+
+// --- 小日期网格数据与行为（用于标注未来/今日/休市）
+const gridStart = computed(() => dayjs().subtract(15, 'day'))
+const gridEnd = computed(() => dayjs().add(7, 'day'))
+const dateGrid = computed(() => {
+  const arr: string[] = []
+  let ptr = gridStart.value
+  while (ptr.isBefore(gridEnd.value) || ptr.isSame(gridEnd.value, 'day')) {
+    arr.push(ptr.format('YYYYMMDD'))
+    ptr = ptr.add(1, 'day')
+  }
+  return arr
+})
+
+const isFuture = (d: string) => d > dayjs().format('YYYYMMDD')
+const isTodayStr = (d: string) => d === dayjs().format('YYYYMMDD')
+
+const onGridDateClick = (d: string) => {
+  if (isTodayStr(d)) {
+    ElMessage.info('今日开市未结束，无数据')
+    return
+  }
+  if (isFuture(d)) {
+    ElMessage.info(`${dayjs(d, 'YYYYMMDD').format('YYYY-MM-DD')} 还未开市`)
+    return
+  }
+  // 若为休市（tradeDates 不包含），不可选
+  if (!tradeDates.value.has(d)) return
+  queryDate.value = d
+  fetchSummaryData()
+}
+
 </script>
 
 <style scoped>
@@ -161,4 +249,41 @@ onMounted(() => {
   margin-left: 5px;
   cursor: pointer;
 }
+
+.date-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 18px 0;
+}
+.date-cell {
+  width: 46px;
+  height: 36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:4px;
+  background: #f5f7fa;
+  cursor: default;
+  color: #606266;
+  font-size: 12px;
+}
+.date-cell.selectable {
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #ebeef5;
+}
+.date-cell.today {
+  background: #fff7cc;
+  border: 1px dashed #ffd666;
+}
+.date-cell.future {
+  background: #f0f9ff;
+  color: #409eff;
+}
+.date-cell.holiday {
+  background: #fff0f0;
+  color: #f56c6c;
+}
+.date-label { font-weight: 500 }
 </style>

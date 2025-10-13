@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 import math
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def _safe_number(x: Any) -> Any:
@@ -109,6 +109,69 @@ def get_trade_dates() -> List[str]:
     return _load_trade_dates()
 
 
+def _is_future_date(d: str) -> bool:
+    try:
+        return int(d) > int(datetime.now().strftime('%Y%m%d'))
+    except Exception:
+        return False
+
+
+def get_trade_dates_with_status() -> List[Dict[str, Any]]:
+    """返回带状态的交易日列表：[{date: 'YYYYMMDD', status: 'open'|'holiday'|'future'}]
+
+    注意：status 'open' 表示该日为交易日（理论上有数据），'holiday' 表示非交易日，'future' 表示日期在今天之后。
+    """
+    dates = _load_trade_dates()
+    out: List[Dict[str, Any]] = []
+    if not dates:
+        return out
+
+    # build a contiguous calendar between min and max available trade date
+    try:
+        min_d = min(dates)
+        max_d = max(dates)
+        start_dt = datetime.strptime(min_d, '%Y%m%d')
+        end_dt = datetime.strptime(max_d, '%Y%m%d')
+    except Exception:
+        # fallback: just mark known trade dates
+        today = datetime.now().strftime('%Y%m%d')
+        for d in dates:
+            st = 'open' if d <= today else 'future'
+            out.append({'date': d, 'status': st})
+        return out
+
+    date_set = set(dates)
+    today_dt = datetime.now()
+    cur = start_dt
+    while cur <= end_dt:
+        ds = cur.strftime('%Y%m%d')
+        if cur.date() > today_dt.date():
+            st = 'future'
+        else:
+            st = 'open' if ds in date_set else 'holiday'
+        out.append({'date': ds, 'status': st})
+        cur = cur + timedelta(days=1)
+
+    return out
+
+
+def get_last_open_date(before: Optional[str] = None) -> Optional[str]:
+    """返回最后一个已开市的交易日。若提供 before（YYYYMMDD），则返回 strictly < before 的最后开市日；
+    否则返回严格 < today 的最后开市日。如果没有找到则返回 None。
+    """
+    dates = _load_trade_dates()
+    if not dates:
+        return None
+    pivot = before or datetime.now().strftime('%Y%m%d')
+    for d in reversed(dates):
+        try:
+            if d < pivot:
+                return d
+        except Exception:
+            continue
+    return None
+
+
 def get_sse_daily_summary(date_str: Optional[str] = None) -> Dict[str, Any]:
     """返回上海证券交易所每日概况。
 
@@ -122,24 +185,40 @@ def get_sse_daily_summary(date_str: Optional[str] = None) -> Dict[str, Any]:
         result['message'] = '无法获取交易日历'
         return result
 
-    # choose default date if none provided: the last trade date <= today, else last available
+    # choose default date if none provided: the last open trade date STRICTLY before today
     if not date_str:
-        today = datetime.now().strftime('%Y%m%d')
-        candidate = None
-        # trade_dates is expected to be ascending; pick last <= today
-        for d in reversed(trade_dates):
-            if d <= today:
-                candidate = d
-                break
-        if candidate is None:
-            candidate = trade_dates[-1]
-        date_str = candidate
-        result['date'] = date_str
+        last_open = get_last_open_date()
+        if last_open:
+            date_str = last_open
+            result['date'] = date_str
+        else:
+            # fallback to latest available
+            date_str = trade_dates[-1]
+            result['date'] = date_str
+
+    # annotate last_open_date in result for caller convenience
+    result['last_open_date'] = get_last_open_date(before=date_str if date_str else None)
+
+    # detect future date
+    if _is_future_date(date_str):
+        result['message'] = f"{date_str} 为未来日期，尚未开市"
+        result['holiday'] = False
+        result['status'] = 'future'
+        return result
 
     # if the requested date is not a trade date, mark as holiday and return message
     if date_str not in trade_dates:
         result['holiday'] = True
         result['message'] = f"{date_str} 为休市日"
+        result['status'] = 'holiday'
+        return result
+
+    # if the requested date is today, do not return data (trading not ended)
+    today = datetime.now().strftime('%Y%m%d')
+    if date_str == today:
+        result['message'] = '今日开市尚未结束，数据未最终确认，请查询上一个已开市日或稍后重试'
+        result['status'] = 'today_incomplete'
+        result['holiday'] = False
         return result
 
     # fetch data via akshare if available
@@ -163,6 +242,7 @@ def get_sse_daily_summary(date_str: Optional[str] = None) -> Dict[str, Any]:
         records = df.to_dict(orient='records')
         result['data'] = _to_json_safe(records)
         result['message'] = '成功'
+        result['status'] = 'ok'
         return result
     except Exception as e:
         result['message'] = f'请求数据失败: {e}'
