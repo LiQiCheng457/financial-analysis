@@ -311,6 +311,79 @@ def get_stock_history_data(code: str, start_date: Optional[str] = None, end_date
         if not code:
             return []
 
+
+        def search_stocks(query: str, limit: int = 20) -> List[Dict[str, Any]]:
+            """搜索股票（按代码或名称模糊匹配）。
+
+            若环境中安装并可用 akshare，会尝试从常见的 A 股列表中搜索；否则返回空列表。
+            返回格式: [{ 'code': '600519', 'name': '贵州茅台' }, ...]
+            """
+            try:
+                if not query:
+                    return []
+                q = str(query).strip()
+                if ak is None:
+                    return []
+
+                # Try to load a list of A-share codes/names and filter
+                # ak.stock_zh_a_spot provides real-time snapshot; fallback to other available methods
+                df = None
+                if hasattr(ak, 'stock_zh_a_spot'):
+                    try:
+                        df = ak.stock_zh_a_spot()
+                    except Exception:
+                        df = None
+
+                # If df is available, try to extract code/name columns
+                results: List[Dict[str, Any]] = []
+                if df is not None:
+                    # normalise columns
+                    cols = [c.lower() for c in df.columns]
+                    # try to find code and name columns
+                    code_col = None
+                    name_col = None
+                    for c in df.columns:
+                        lc = str(c).lower()
+                        if 'code' in lc or '股票代码' in lc or '代码' in lc:
+                            code_col = c
+                        if 'name' in lc or '股票名称' in lc or '名称' in lc:
+                            name_col = c
+                    if code_col is None and '代码' in df.columns:
+                        code_col = '代码'
+                    if name_col is None and '名称' in df.columns:
+                        name_col = '名称'
+
+                    if code_col is None or name_col is None:
+                        # try common keys
+                        for c in df.columns:
+                            if str(c).lower() in ('code', 'symbol') and code_col is None:
+                                code_col = c
+                            if str(c).lower() in ('name', 'stock_name') and name_col is None:
+                                name_col = c
+
+                    # fallback: use first two columns
+                    if code_col is None:
+                        code_col = df.columns[0]
+                    if name_col is None and len(df.columns) > 1:
+                        name_col = df.columns[1]
+
+                    # do case-insensitive contains filter on code or name
+                    for _, row in df.iterrows():
+                        try:
+                            code_val = str(row.get(code_col, '')).strip()
+                            name_val = str(row.get(name_col, '')).strip()
+                            if q in code_val or q in name_val:
+                                results.append({'code': code_val, 'name': name_val})
+                                if len(results) >= limit:
+                                    break
+                        except Exception:
+                            continue
+
+                return results
+            except Exception as e:
+                print(f"search_stocks error: {e}")
+                return []
+
         code_str = str(code)
 
         # 构造不同源可能需要的符号

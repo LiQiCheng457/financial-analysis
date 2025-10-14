@@ -2,71 +2,28 @@
   <el-container class="layout-container">
     <el-aside width="200px">
       <el-scrollbar>
-        <el-menu :default-openeds="['market']" router>
-          <el-menu-item index="/">
-            <el-icon><HomeFilled /></el-icon>
-            <span>主页</span>
-          </el-menu-item>
+        <el-menu :default-openeds="defaultOpeneds" router>
+          <template v-for="item in menu" :key="item.key">
+            <el-sub-menu v-if="item.children && item.children.length" :index="item.key">
+              <template #title>
+                <el-icon>
+                  <component :is="getIconComponent(item.icon)" />
+                </el-icon>
+                {{ item.title }}
+              </template>
 
-          <!-- 行情中心 -->
-          <el-sub-menu index="market">
-            <template #title>
-              <el-icon><Document /></el-icon>行情中心
-            </template>
-            <el-menu-item index="/market-summary">每日概况</el-menu-item>
-            <el-menu-item index="/stock-history">历史行情数据</el-menu-item>
-            <el-menu-item index="/market/kline">K线图</el-menu-item>
-            <el-menu-item index="/market/timeseries">分时图</el-menu-item>
-            <el-menu-item index="/market/snapshot">个股快照</el-menu-item>
-          </el-sub-menu>
+              <el-menu-item v-for="child in item.children" :key="child.key" :index="child.path">
+                {{ child.title }}
+              </el-menu-item>
+            </el-sub-menu>
 
-          <!-- 自选股 -->
-          <el-sub-menu index="watchlist">
-            <template #title>
-              <el-icon><Bell /></el-icon>自选股
-            </template>
-            <el-menu-item index="/watchlist/crud">增删改查</el-menu-item>
-            <el-menu-item index="/watchlist/groups">分组管理</el-menu-item>
-            <el-menu-item index="/watchlist/alerts">涨跌提醒</el-menu-item>
-          </el-sub-menu>
-
-          <!-- 选股器 -->
-          <el-sub-menu index="picker">
-            <template #title>
-              <el-icon><Document /></el-icon>选股器
-            </template>
-            <el-menu-item index="/picker/filter">条件筛选</el-menu-item>
-            <el-menu-item index="/picker/backtest">策略回测</el-menu-item>
-            <el-menu-item index="/picker/hot">热门策略</el-menu-item>
-          </el-sub-menu>
-
-          <!-- 财务分析 -->
-          <el-sub-menu index="finance">
-            <template #title>
-              <el-icon><Document /></el-icon>财务分析
-            </template>
-            <el-menu-item index="/finance/reports">财务报表</el-menu-item>
-            <el-menu-item index="/finance/metrics">关键指标</el-menu-item>
-            <el-menu-item index="/finance/peer">同业对比</el-menu-item>
-          </el-sub-menu>
-
-          <!-- 新闻报告 -->
-          <el-sub-menu index="news">
-            <template #title>
-              <el-icon><Document /></el-icon>新闻报告
-            </template>
-            <el-menu-item index="/news/realtime">实时新闻</el-menu-item>
-            <el-menu-item index="/news/announcements">公司公告</el-menu-item>
-          </el-sub-menu>
-
-          <!-- 用户系统 -->
-          <el-sub-menu index="user">
-            <template #title>
-              <el-icon><User /></el-icon>用户系统
-            </template>
-            <el-menu-item index="/user/profile">个人中心</el-menu-item>
-            <el-menu-item index="/user/permissions">权限管理</el-menu-item>
-          </el-sub-menu>
+            <el-menu-item v-else :index="item.path">
+              <el-icon>
+                <component :is="getIconComponent(item.icon)" />
+              </el-icon>
+              <span>{{ item.title }}</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </el-scrollbar>
     </el-aside>
@@ -97,11 +54,14 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted } from 'vue'
-import { HomeFilled, Setting, Document, Bell, User } from '@element-plus/icons-vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import * as Icons from '@element-plus/icons-vue'
+import menuConfig from '@/config/menu'
+import ICON_MAP from '@/config/icon-map'
 import { useAuthStore } from '@/store/auth'
 import { useRouter } from 'vue-router'
 import UserAvatar from '@/components/UserAvatar.vue'
+import { useRoute } from 'vue-router'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -118,6 +78,55 @@ onMounted(() => {
     authStore.fetchUser()
   }
 })
+
+// menu and icon helpers
+const menuItems = menuConfig
+
+// explicit icon mapping to avoid heuristic mismatch
+// ICON_MAP imported from config/icon-map.ts
+
+const route = useRoute()
+const defaultOpeneds = ref<string[]>([])
+
+function findParentKeysForPath(path: string) {
+  const parents: string[] = []
+  for (const item of menuItems) {
+    if (item.children) {
+      for (const c of item.children) {
+        if (c.path === path) {
+          parents.push(item.key)
+        }
+      }
+    } else if (item.path === path) {
+      // top-level item, no parent
+    }
+  }
+  return parents
+}
+
+// initialize based on current route
+defaultOpeneds.value = findParentKeysForPath(route.path)
+
+// update when route changes
+watch(
+  () => route.path,
+  (newPath) => {
+    defaultOpeneds.value = findParentKeysForPath(newPath)
+  }
+)
+
+/**
+ * Return the component for a given icon name string from Element Plus icons.
+ * Falls back to a generic Setting icon when not found.
+ */
+function getIconComponent(name?: string) {
+  if (!name) return Icons.Setting
+  const key = ICON_MAP[name] || (name.charAt(0).toUpperCase() + name.slice(1))
+  return (Icons as any)[key] || Icons.Setting
+}
+
+// expose to template
+const menu = menuItems
 </script>
 
 <style scoped>

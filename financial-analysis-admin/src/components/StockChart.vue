@@ -31,7 +31,7 @@ import dayjs from 'dayjs'
 echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
 
 const props = defineProps({
-  title: { type: String, default: '个股最近半年行情' },
+  title: { type: String, default: '个股最近一年行情' },
   subtitle: { type: String, default: '折线图 — 收盘价' },
 })
 
@@ -63,8 +63,8 @@ const fetchAndRender = async () => {
   if (!symbol.value) return
   loading.value = true
   try {
-    const end = dayjs()
-    const start = end.subtract(6, 'month')
+  const end = dayjs()
+  const start = end.subtract(1, 'year')
     const params = {
       code: symbol.value,
       start_date: start.format('YYYYMMDD'),
@@ -110,11 +110,12 @@ const fetchAndRender = async () => {
       return String(a.date || '').localeCompare(b.date || '')
     })
 
+// no-op: source selection removed, refresh controlled by symbol input and button
     const x = sorted.map((r: any) => r.date)
-    const openArr = sorted.map((r: any) => (r.open == null ? null : r.open))
-    const closeArr = sorted.map((r: any) => (r.close == null ? null : r.close))
-    const highArr = sorted.map((r: any) => (r.high == null ? null : r.high))
-    const lowArr = sorted.map((r: any) => (r.low == null ? null : r.low))
+  const openArr = sorted.map((r: any) => (r.open == null ? null : r.open))
+  const closeArr = sorted.map((r: any) => (r.close == null ? null : r.close))
+  const highArr = sorted.map((r: any) => (r.high == null ? null : r.high))
+  const lowArr = sorted.map((r: any) => (r.low == null ? null : r.low))
 
     const seriesMap: Record<string, any[]> = {
       '开盘': openArr,

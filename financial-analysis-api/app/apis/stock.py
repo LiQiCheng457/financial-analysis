@@ -22,6 +22,17 @@ async def trade_dates() -> JSONResponse:
 
 
 
+@router.get("/search", summary="搜索股票（代码/名称）")
+async def search_stocks(q: Optional[str] = Query(None, description="查询关键字(代码或名称)"), limit: Optional[int] = Query(20, description="返回数量上限")) -> JSONResponse:
+    try:
+        items = stock_service.search_stocks(q or "", limit=limit or 20) or []
+        return JSONResponse(content=jsonable_encoder(items))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @router.get("/trade_dates_with_status", summary="获取交易日历（含每日状态）")
 async def trade_dates_with_status() -> JSONResponse:
     try:

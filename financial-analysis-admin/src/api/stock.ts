@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import axios from 'axios'
 
 // 获取所有交易日
 export function getTradeDates() {
@@ -25,6 +26,25 @@ export function getStockHistory(params: { code: string; start_date?: string; end
     url: '/stocks/history',
     method: 'get',
     params,
+  })
+}
+
+
+// 搜索股票建议（用于 autocomplete）
+export function searchStocks(q: string, limit: number = 20) {
+  // Prefer direct backend call (bypass vite proxy) to avoid dev-server 404 when proxy isn't active.
+  const base = 'http://127.0.0.1:8000/api'
+  try {
+    return axios.get(`${base}/stocks/search`, { params: { q, limit } }).then(r => r.data)
+  } catch (e) {
+    // if direct call fails synchronously, fall back to proxied request
+  }
+
+  // fallback to proxied request
+  return request({
+    url: '/stocks/search',
+    method: 'get',
+    params: { q, limit }
   })
 }
 
