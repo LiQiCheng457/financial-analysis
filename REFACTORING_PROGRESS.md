@@ -103,6 +103,33 @@
 
 ## 📝 重要笔记
 
+### 重构完成代码存放
+
+所有重构完成并通过验收的代码都已复制到 `refactored/` 目录中：
+
+```
+refactored/
+├── frontend/
+│   ├── composables/           # ✅ 4个 Composables
+│   │   ├── useSearch.ts
+│   │   ├── usePagination.ts
+│   │   ├── useForm.ts
+│   │   └── useStock.ts
+│   │
+│   └── components/
+│       ├── atomic/            # ✅ 2个原子组件
+│       │   ├── BaseCard.vue
+│       │   └── BaseEmpty.vue
+│       │
+│       └── business/          # ✅ 1个业务组件
+│           └── company/
+│               └── CompanySearchPanel.vue
+│
+└── README.md                  # 重构完成代码使用指南
+```
+
+📚 **详情请查看：** [refactored/README.md](./refactored/README.md)
+
 ### 设计原则
 1. **单一职责**：每个组件/函数只做一件事
 2. **可复用性**：优先创建可复用的通用组件
