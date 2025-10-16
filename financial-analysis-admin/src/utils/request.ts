@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 
 // 创建 axios 实例
 const service = axios.create({
-  baseURL: '/api', // Vite proxy 会将 /api 转发到 http://127.0.0.1:8000/api
+  baseURL: '/api', // Vite proxy 会将 /api 转发到 http://127.0.0.1:8001/api
   timeout: 10000 // 请求超时时间
 })
 

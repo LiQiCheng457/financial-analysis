@@ -1,6 +1,18 @@
 <template>
-  <div>
-    <h2>财务分析 - 关键指标（占位）</h2>
-    <p>此页面为占位组件，后续实现关键指标计算与展示。</p>
-  </div>
+  <PlaceholderView
+    title="财务指标分析"
+    icon="💰"
+    description="深度解析上市公司财务数据，提供专业的财务指标分析工具"
+    :features="[
+      '盈利能力分析：ROE、ROA、净利率等核心指标',
+      '偿债能力评估：资产负债率、流动比率分析',
+      '营运能力监控：存货周转率、应收账款周转率',
+      '成长能力追踪：营收增长率、利润增长率',
+      '估值指标对比：PE、PB、PS等市场估值分析'
+    ]"
+  />
 </template>
+
+<script setup lang="ts">
+import PlaceholderView from '@/components/PlaceholderView.vue'
+</script>

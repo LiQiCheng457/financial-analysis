@@ -1,6 +1,18 @@
 <template>
-  <div>
-    <h2>财务分析 - 财务报表（占位）</h2>
-    <p>此页面为占位组件，后续实现财务报表展示。</p>
-  </div>
+  <PlaceholderView
+    title="财务报表查询"
+    icon="📋"
+    description="查看和分析上市公司完整财务报表数据"
+    :features="[
+      '资产负债表：公司财务状况全景展示',
+      '利润表分析：经营业绩与盈利能力追踪',
+      '现金流量表：现金流动性健康度评估',
+      '多期对比：季度、年度报表趋势分析',
+      '数据导出：支持Excel格式导出下载'
+    ]"
+  />
 </template>
+
+<script setup lang="ts">
+import PlaceholderView from '@/components/PlaceholderView.vue'
+</script>

@@ -1,6 +1,18 @@
 <template>
-  <div>
-    <h2>财务分析 - 同业对比（占位）</h2>
-    <p>此页面为占位组件，后续实现同业对比功能。</p>
-  </div>
+  <PlaceholderView
+    title="同业对比分析"
+    icon="📊"
+    description="横向对比同行业公司经营数据，发现投资机会与风险"
+    :features="[
+      '行业地位评估：市场份额、行业排名对比',
+      '财务指标对比：多维度财务数据横向比较',
+      '估值水平分析：同业PE/PB估值区间对比',
+      '盈利能力排名：ROE、毛利率等指标排序',
+      '成长性对比：营收增速、利润增速横向分析'
+    ]"
+  />
 </template>
+
+<script setup lang="ts">
+import PlaceholderView from '@/components/PlaceholderView.vue'
+</script>

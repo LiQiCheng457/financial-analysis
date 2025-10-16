@@ -2,7 +2,7 @@
 
 特性：
 - 封装 akshare 的调用，若环境中未安装 akshare 则降级返回空结构，避免抛出 ImportError。
-- 提供：get_trade_dates(), get_sse_daily_summary(date_str), get_stock_history_data(...)
+- 提供：get_trade_dates(), get_sse_daily_summary(date_str), get_stock_history_data(...), get_stock_realtime_info(...)
 - 输出为 JSON-safe（将 numpy/pandas 类型与 NaN/inf 转为 None 或原生 Python 类型）。
 """
 
@@ -14,8 +14,10 @@ except Exception:
 import pandas as pd
 import numpy as np
 import math
+import traceback
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+from sqlalchemy import text
 
 
 def _safe_number(x: Any) -> Any:
@@ -47,6 +49,130 @@ def _clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     for col in df2.select_dtypes(include=['datetime64[ns]']).columns:
         df2[col] = df2[col].dt.strftime('%Y-%m-%d')
     return df2
+
+
+def get_stock_realtime_info(code: str) -> Dict[str, Any]:
+    """获取单个股票的实时行情信息
+    
+    参数:
+    - code: 股票代码（6位数字，如 '000001', '600000'）
+    
+    返回:
+    {
+        'status': 'ok' | 'error',
+        'message': str,
+        'data': { ... } 或 None
+    }
+    """
+    result = {
+        'status': 'error',
+        'message': '',
+        'data': None
+    }
+    
+    try:
+        if not code:
+            result['message'] = '股票代码不能为空'
+            return result
+            
+        if ak is None:
+            result['message'] = 'akshare 未安装，无法查询'
+            return result
+        
+        # 确保股票代码是6位数字
+        code_clean = str(code).strip()
+        if len(code_clean) < 6:
+            code_clean = code_clean.zfill(6)
+        
+        # 使用 stock_individual_info_em 接口获取单股票实时信息
+        df = ak.stock_individual_info_em(symbol=code_clean)
+        
+        if df is None or df.empty:
+            result['message'] = f'未找到股票代码 {code_clean} 的数据'
+            return result
+        
+        # 清洗数据
+        cleaned = _clean_dataframe(df)
+        records = cleaned.to_dict(orient='records')
+        safe_records = _to_json_safe(records)
+        
+        result['status'] = 'ok'
+        result['message'] = '查询成功'
+        result['data'] = safe_records[0] if safe_records else None
+        
+        return result
+        
+    except Exception as e:
+        result['message'] = f'查询失败: {str(e)}'
+        print(f"get_stock_realtime_info error: {e}")
+        return result
+
+
+def get_stock_realtime_batch(codes: List[str]) -> Dict[str, Any]:
+    """批量获取多个股票的实时行情
+    
+    参数:
+    - codes: 股票代码列表（如 ['000001', '600000', '300750']）
+    
+    返回:
+    {
+        'status': 'ok' | 'error',
+        'message': str,
+        'total': int,
+        'data': [{ ... }, ...]
+    }
+    """
+    result = {
+        'status': 'error',
+        'message': '',
+        'total': 0,
+        'data': []
+    }
+    
+    try:
+        if not codes or len(codes) == 0:
+            result['message'] = '股票代码列表不能为空'
+            return result
+            
+        if ak is None:
+            result['message'] = 'akshare 未安装，无法查询'
+            return result
+        
+        # 获取所有A股实时数据
+        df = ak.stock_zh_a_spot_em()
+        
+        if df is None or df.empty:
+            result['message'] = '获取市场数据失败'
+            return result
+        
+        # 清洗代码列表
+        codes_clean = [str(c).strip().zfill(6) if len(str(c).strip()) < 6 else str(c).strip() for c in codes]
+        
+        # 筛选指定的股票
+        filtered = df[df['代码'].isin(codes_clean)]
+        
+        if filtered.empty:
+            result['message'] = f'未找到任何股票数据'
+            result['status'] = 'ok'
+            return result
+        
+        # 清洗数据
+        cleaned = _clean_dataframe(filtered)
+        records = cleaned.to_dict(orient='records')
+        safe_records = _to_json_safe(records)
+        
+        result['status'] = 'ok'
+        result['message'] = f'成功获取 {len(safe_records)} 只股票的实时数据'
+        result['total'] = len(safe_records)
+        result['data'] = safe_records
+        
+        return result
+        
+    except Exception as e:
+        result['message'] = f'查询失败: {str(e)}'
+        print(f"get_stock_realtime_batch error: {e}")
+        return result
+
 
 
 def _to_json_safe(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -433,3 +559,195 @@ def get_stock_history_data(code: str, start_date: Optional[str] = None, end_date
     except Exception as e:
         print(f"Error in get_stock_history_data: {e}")
         return []
+
+
+def search_companies_by_industry(db, q: str, page: int = 1, page_size: int = 50, industry: str = None) -> Dict[str, Any]:
+    """按关键词和/或行业搜索公司列表（支持分页）
+
+    参数:
+    - db: 数据库会话
+    - q: 搜索关键词（股票代码、公司名称等）
+    - page: 页码（从1开始）
+    - page_size: 每页数量（默认50）
+    - industry: 行业筛选（逗号分隔，支持多个），如 "电子,计算机,通信"
+
+    返回:
+    {
+        'total': 总数量,
+        'page': 当前页码,
+        'page_size': 每页大小,
+        'total_pages': 总页数,
+        'data': [{'stock_code': ..., 'company_name': ..., 'eastmoney_industry': ..., 'regulatory_industry': ...}, ...]
+    }
+    """
+    try:
+        # 至少需要一个搜索条件
+        if not q and not industry:
+            return {'total': 0, 'page': 1, 'page_size': page_size, 'total_pages': 0, 'data': []}
+
+        # 查询字段（优化显示内容）
+        cols = [
+            'stock_code',              # 股票代码
+            'a_stock_abbr',            # 股票简称
+            'company_name',            # 公司名称
+            'security_category',       # 证券类型
+            'chairman',                # 董事长
+            'legal_representative',    # 法人
+            'region',                  # 区域
+            'registered_capital',      # 注册资本（元）
+            'eastmoney_industry',      # 东财行业（保留用于筛选）
+            'regulatory_industry',     # 证监会行业（保留用于筛选）
+            'listing_exchange'         # 交易所
+        ]
+        cols_sql = ', '.join(cols)
+
+        # 构建 WHERE 条件
+        where_conditions = []
+        params = {}
+
+        # 关键字搜索（原有逻辑）
+        if q:
+            likeq = f"%{q}%"
+            where_conditions.append("""
+                (stock_code LIKE :likeq 
+                OR company_name LIKE :likeq 
+                OR a_stock_abbr LIKE :likeq
+                OR eastmoney_industry LIKE :likeq 
+                OR regulatory_industry LIKE :likeq)
+            """)
+            params['likeq'] = likeq
+            params['q'] = q
+
+        # 行业筛选（新增逻辑 - OR 条件）
+        if industry:
+            industries = [ind.strip() for ind in industry.split(',') if ind.strip()]
+            if industries:
+                industry_or_conditions = []
+                for i, ind in enumerate(industries):
+                    key_east = f'ind_east_{i}'
+                    key_reg = f'ind_reg_{i}'
+                    industry_or_conditions.append(f"""
+                        (eastmoney_industry LIKE :{key_east} OR regulatory_industry LIKE :{key_reg})
+                    """)
+                    params[key_east] = f"%{ind}%"
+                    params[key_reg] = f"%{ind}%"
+                
+                if industry_or_conditions:
+                    where_conditions.append(f"({' OR '.join(industry_or_conditions)})")
+
+        # 组合 WHERE 子句
+        where_clause = ' AND '.join(where_conditions) if where_conditions else '1=1'
+
+        with db.begin():
+            # 使用 DISTINCT 去重（防止同一公司因多个行业匹配而重复）
+            count_sql = f"""
+                SELECT COUNT(DISTINCT stock_code) as total FROM stock_basic_info 
+                WHERE {where_clause}
+            """
+            
+            count_result = db.execute(text(count_sql), params).fetchone()
+            total = count_result[0] if count_result else 0
+
+            if total == 0:
+                return {'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0, 'data': []}
+
+            # 计算总页数
+            total_pages = (total + page_size - 1) // page_size
+            
+            # 确保页码有效
+            if page < 1:
+                page = 1
+            if page > total_pages:
+                page = total_pages
+
+            # 计算偏移量
+            offset = (page - 1) * page_size
+
+            # 查询数据（使用 DISTINCT 去重，按优先级排序）
+            order_clause = ""
+            if q:
+                order_clause = f"""
+                    ORDER BY 
+                        CASE 
+                            WHEN stock_code = :q THEN 1
+                            WHEN stock_code LIKE :likeq THEN 2
+                            WHEN eastmoney_industry LIKE :likeq THEN 3
+                            WHEN regulatory_industry LIKE :likeq THEN 4
+                            ELSE 5
+                        END,
+                        stock_code
+                """
+            else:
+                order_clause = "ORDER BY stock_code"
+
+            data_sql = f"""
+                SELECT DISTINCT {cols_sql} FROM stock_basic_info 
+                WHERE {where_clause}
+                {order_clause}
+                LIMIT :limit OFFSET :offset
+            """
+            
+            params['limit'] = page_size
+            params['offset'] = offset
+            
+            results = db.execute(text(data_sql), params).mappings().fetchall()
+
+            data = [dict(r) for r in results]
+
+            return {
+                'total': total,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'data': data
+            }
+
+    except Exception as e:
+        print(f"search_companies_by_industry error: {e}")
+        traceback.print_exc()
+        return {'total': 0, 'page': 1, 'page_size': page_size, 'total_pages': 0, 'data': [], 'error': str(e)}
+
+
+def get_company_profile(db, q: str) -> Optional[Dict[str, Any]]:
+    """从数据库中查询公司基本资料，q 可以是股票代码或公司名称（模糊匹配）
+
+    返回单条记录的字典或 None。
+    """
+    try:
+        if not q:
+            return None
+
+        # explicit columns to return (keep stable ordering and field names for frontend)
+        # 排除字段: extended_abbr, b_stock_code, h_stock_code, b_stock_abbr, h_stock_abbr
+        cols = [
+            'stock_code', 'company_name', 'english_name', 
+            'a_stock_code', 'a_stock_abbr', 'former_name',
+            'security_category', 'eastmoney_industry', 'listing_exchange', 'regulatory_industry',
+            'general_manager', 'legal_representative', 'board_secretary', 'chairman',
+            'securities_representative', 'independent_directors',
+            'contact_phone', 'email', 'fax', 'website',
+            'office_address', 'registered_address', 'region', 'postal_code',
+            'registered_capital', 'business_registration', 'employee_count', 'management_count',
+            'law_firm', 'accounting_firm', 'company_intro', 'business_scope'
+        ]
+        cols_sql = ', '.join(cols)
+
+        # 使用 SQL 进行模糊匹配，优先尝试按 stock_code 精确匹配
+        sql_exact = f"SELECT {cols_sql} FROM stock_basic_info WHERE stock_code = :q LIMIT 1"
+        with db.begin():
+            # use mappings() to get a dict-like result across SQLAlchemy versions
+            res = db.execute(text(sql_exact), {"q": q}).mappings().fetchone()
+            if res:
+                return dict(res)
+
+            # 模糊匹配 company_name 或 a_stock_code 或 a_stock_abbr
+            sql_like = f"SELECT {cols_sql} FROM stock_basic_info WHERE company_name LIKE :likeq OR a_stock_code LIKE :likeq OR a_stock_abbr LIKE :likeq LIMIT 1"
+            likeq = f"%{q}%"
+            res2 = db.execute(text(sql_like), {"likeq": likeq}).mappings().fetchone()
+            if res2:
+                return dict(res2)
+
+        return None
+    except Exception as e:
+        print(f"get_company_profile error: {e}")
+        return None

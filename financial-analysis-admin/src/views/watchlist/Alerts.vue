@@ -1,6 +1,18 @@
 <template>
-  <div>
-    <h2>自选股 - 涨跌提醒（占位）</h2>
-    <p>此页面为占位组件，后续实现涨跌提醒功能。</p>
-  </div>
+  <PlaceholderView
+    title="🔔 价格提醒"
+    icon="🔔"
+    description="设置股票价格提醒，不错过任何投资机会"
+    :features="[
+      '多种提醒：涨跌幅、价格突破、成交量异动提醒',
+      '灵活设置：自定义提醒条件和触发阈值',
+      '多渠道通知：邮件、短信、站内消息推送',
+      '历史记录：查看所有触发的提醒历史',
+      '智能建议：AI推荐合理的提醒设置'
+    ]"
+  />
 </template>
+
+<script setup lang="ts">
+import PlaceholderView from '@/components/PlaceholderView.vue'
+</script>

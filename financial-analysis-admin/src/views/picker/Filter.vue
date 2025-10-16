@@ -1,6 +1,18 @@
 <template>
-  <div>
-    <h2>选股器 - 条件筛选（占位）</h2>
-    <p>此页面为占位组件，后续实现条件筛选功能。</p>
-  </div>
+  <PlaceholderView
+    title="🔍 条件选股"
+    icon="🔍"
+    description="通过多维度指标筛选符合条件的股票"
+    :features="[
+      '多指标筛选：技术指标、财务指标、估值指标组合',
+      '自定义条件：灵活设置筛选条件和阈值',
+      '模板保存：保存常用筛选条件为模板',
+      '实时筛选：基于最新数据快速筛选',
+      '结果导出：筛选结果导出和批量加入自选'
+    ]"
+  />
 </template>
+
+<script setup lang="ts">
+import PlaceholderView from '@/components/PlaceholderView.vue'
+</script>

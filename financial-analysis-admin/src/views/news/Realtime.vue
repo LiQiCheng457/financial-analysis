@@ -1,6 +1,18 @@
 <template>
-  <div>
-    <h2>新闻报告 - 实时新闻（占位）</h2>
-    <p>此页面为占位组件，后续实现实时新闻流。</p>
-  </div>
+  <PlaceholderView
+    title="实时资讯"
+    icon="📰"
+    description="实时推送市场要闻，把握投资机会"
+    :features="[
+      '实时资讯推送：财经新闻即时更新',
+      '行业热点追踪：热门板块动态关注',
+      '政策解读分析：重要政策影响评估',
+      '市场情绪监控：舆情分析与情绪指数',
+      '智能分类筛选：按主题快速查找资讯'
+    ]"
+  />
 </template>
+
+<script setup lang="ts">
+import PlaceholderView from '@/components/PlaceholderView.vue'
+</script>

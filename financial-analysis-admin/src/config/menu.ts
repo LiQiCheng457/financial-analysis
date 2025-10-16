@@ -16,7 +16,7 @@ const menu: MenuItem[] = [
       { key: 'stock-history', title: '历史行情数据', path: '/stock-history' },
       { key: 'market-kline', title: 'K线图', path: '/market/kline' },
       { key: 'market-timeseries', title: '分时图', path: '/market/timeseries' },
-      { key: 'market-snapshot', title: '个股快照', path: '/market/snapshot' },
+      { key: 'market-snapshot', title: '公司概括', path: '/market/snapshot' },
     ],
   },
   {

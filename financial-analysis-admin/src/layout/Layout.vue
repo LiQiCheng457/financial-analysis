@@ -33,9 +33,9 @@
         <div class="toolbar">
           <UserAvatar />
           <el-dropdown>
-            <el-icon style="margin-right: 8px; margin-top: 1px"
-              ><setting
-            /></el-icon>
+            <el-icon style="margin-right: 8px; margin-top: 1px">
+              <component :is="getIconComponent()" />
+            </el-icon>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item @click="handleLogout">退出登录</el-dropdown-item>
@@ -132,17 +132,92 @@ const menu = menuItems
 <style scoped>
 .layout-container {
   height: 100vh;
+  background: #f5f7fa;
 }
+
+.el-aside {
+  background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  transition: width 0.3s ease;
+}
+
+.el-aside :deep(.el-menu) {
+  background: transparent;
+  border-right: none;
+}
+
+.el-aside :deep(.el-menu-item),
+.el-aside :deep(.el-sub-menu__title) {
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.el-aside :deep(.el-menu-item:hover),
+.el-aside :deep(.el-sub-menu__title:hover) {
+  background: rgba(102, 126, 234, 0.2) !important;
+  color: white;
+}
+
+.el-aside :deep(.el-menu-item.is-active) {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)) !important;
+  color: white;
+  border-left: 4px solid #fff;
+}
+
+.el-aside :deep(.el-sub-menu.is-active .el-sub-menu__title) {
+  color: white;
+}
+
 .el-header {
   position: relative;
-  background-color: var(--el-color-primary-light-7);
-  color: var(--el-text-color-primary);
-}
-.toolbar {
-  display: inline-flex;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  right: 20px;
+  justify-content: flex-end;
+  padding: 0 24px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: white;
+}
+
+.toolbar span {
+  color: white;
+  font-weight: 500;
+}
+
+.toolbar :deep(.el-icon) {
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.toolbar :deep(.el-icon:hover) {
+  transform: scale(1.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.el-main {
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: calc(100vh - 60px);
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

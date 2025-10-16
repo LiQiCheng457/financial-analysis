@@ -1,11 +1,13 @@
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 import traceback
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends, Body
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 
 from app.services import stock_service
+from app.core.database import get_db
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -16,6 +18,53 @@ async def trade_dates() -> JSONResponse:
         dates = stock_service.get_trade_dates() or []
         # For backward compatibility return the raw array (frontend expects an array)
         return JSONResponse(content=jsonable_encoder(dates))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/realtime", summary="获取单个股票实时行情")
+async def get_stock_realtime(code: str = Query(..., description="股票代码（6位数字）")) -> JSONResponse:
+    """获取单个股票的实时行情数据
+    
+    - 使用 AKShare 的 stock_individual_info_em 接口
+    - 速度快，直接查询单股票
+    - 示例: /api/stocks/realtime?code=000001
+    """
+    try:
+        result = stock_service.get_stock_realtime_info(code)
+        
+        if result['status'] == 'error':
+            return JSONResponse(
+                content=jsonable_encoder(result),
+                status_code=400
+            )
+        
+        return JSONResponse(content=jsonable_encoder(result))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/realtime/batch", summary="批量获取多个股票实时行情")
+async def get_stock_realtime_batch(codes: List[str] = Body(..., description="股票代码列表")) -> JSONResponse:
+    """批量获取多个股票的实时行情数据
+    
+    - 从全量市场数据中筛选指定股票
+    - 适合批量查询
+    - 示例: POST /api/stocks/realtime/batch
+      Body: ["000001", "600000", "300750"]
+    """
+    try:
+        result = stock_service.get_stock_realtime_batch(codes)
+        
+        if result['status'] == 'error' and result['total'] == 0:
+            return JSONResponse(
+                content=jsonable_encoder(result),
+                status_code=400
+            )
+        
+        return JSONResponse(content=jsonable_encoder(result))
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -71,6 +120,62 @@ async def get_stock_history(
         records = stock_service.get_stock_history_data(code=code, start_date=start_date, end_date=end_date, adjust=adjust or "", source=(source or 'eastmoney'))
         # return raw array for backward compatibility
         return JSONResponse(content=jsonable_encoder(records))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/company_profile', summary='获取公司基本资料')
+async def company_profile(q: Optional[str] = Query(None, description='股票代码或公司名称'), db: Session = Depends(get_db)) -> JSONResponse:
+    try:
+        if not q:
+            return JSONResponse(content=jsonable_encoder({"status": "error", "message": "请提供查询关键字 q（股票代码或公司名称）"}), status_code=400)
+        profile = stock_service.get_company_profile(db, q)
+        if not profile:
+            return JSONResponse(content=jsonable_encoder({"status": "not_found", "message": f"暂无 {q} 公司数据"}), status_code=200)
+        return JSONResponse(content=jsonable_encoder({"status": "ok", "data": profile}))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/search_companies', summary='按行业等条件搜索公司列表（分页）')
+async def search_companies(
+    q: Optional[str] = Query('', description='搜索关键词（股票代码、公司名称等）'),
+    industry: Optional[str] = Query(None, description='行业筛选（逗号分隔，支持多个，如：电子,计算机,通信）'),
+    page: Optional[int] = Query(1, ge=1, description='页码（从1开始）'),
+    page_size: Optional[int] = Query(50, ge=1, le=200, description='每页数量（1-200）'),
+    db: Session = Depends(get_db)
+) -> JSONResponse:
+    try:
+        # q 和 industry 至少需要一个
+        if not q and not industry:
+            return JSONResponse(
+                content=jsonable_encoder({
+                    "status": "error", 
+                    "message": "请提供搜索关键词 q 或行业筛选 industry"
+                }), 
+                status_code=400
+            )
+        
+        result = stock_service.search_companies_by_industry(
+            db, 
+            q=q or '', 
+            industry=industry, 
+            page=page or 1, 
+            page_size=page_size or 50
+        )
+        
+        if 'error' in result:
+            return JSONResponse(
+                content=jsonable_encoder({
+                    "status": "error",
+                    "message": result['error']
+                }),
+                status_code=500
+            )
+        
+        return JSONResponse(content=jsonable_encoder({"status": "ok", **result}))
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

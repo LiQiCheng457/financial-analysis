@@ -1,6 +1,18 @@
 <template>
-  <div>
-    <h2>新闻报告 - 公司公告（占位）</h2>
-    <p>此页面为占位组件，后续实现公司公告查看。</p>
-  </div>
+  <PlaceholderView
+    title="📢 公司公告"
+    icon="📢"
+    description="查看上市公司重要公告、业绩预告、股东会议等信息"
+    :features="[
+      '实时更新：第一时间推送重要公告信息',
+      '分类浏览：按公告类型、行业、主题智能分类',
+      '智能解读：AI辅助解读公告关键要点',
+      '关注提醒：订阅关注公司的公告推送',
+      '历史查询：查询历史公告记录和统计'
+    ]"
+  />
 </template>
+
+<script setup lang="ts">
+import PlaceholderView from '@/components/PlaceholderView.vue'
+</script>
