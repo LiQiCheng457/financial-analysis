@@ -7,6 +7,9 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    BaseCard: typeof import('./src/components/atomic/BaseCard.vue')['default']
+    BaseEmpty: typeof import('./src/components/atomic/BaseEmpty.vue')['default']
+    CompanySearchPanel: typeof import('./src/components/business/company/CompanySearchPanel.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
