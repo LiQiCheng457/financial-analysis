@@ -1,0 +1,29 @@
+# 前端忽略
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/coverage/
+
+# 后端忽略
+backend/venv/
+backend/.env
+backend/.env.local
+backend/__pycache__/
+backend/*.pyc
+backend/*.log
+backend/.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+logs/
