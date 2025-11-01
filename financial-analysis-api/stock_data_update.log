@@ -1,0 +1,4 @@
+2025-11-01 15:21:56,010 - ERROR - 数据库连接失败: (1045, "Access denied for user 'root'@'localhost' (using password: NO)")
+2025-11-01 15:21:56,011 - INFO - SH600000: 首次导入数据，起始日期 20150101
+2025-11-01 15:21:56,011 - INFO - SH600000: 获取 20150101 至 20251101 的数据
+2025-11-01 15:21:56,869 - ERROR - 数据库连接失败: (1045, "Access denied for user 'root'@'localhost' (using password: NO)")

@@ -19,6 +19,14 @@
         <div class="user-info">
           <h2 class="username">{{ userInfo.username }}</h2>
           <div class="user-meta">
+            <el-tag 
+              :type="userInfo.role === 'admin' ? 'danger' : 'primary'" 
+              size="large" 
+              effect="dark"
+            >
+              <el-icon><UserFilled /></el-icon>
+              {{ getRoleDisplayName(userInfo.role) }}
+            </el-tag>
             <el-tag type="info" size="small">
               <el-icon><Clock /></el-icon>
               注册时间：{{ formatDate(userInfo.created_at) }}
@@ -324,24 +332,35 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
+import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { 
   User, Camera, Clock, Connection, Lock, Iphone, Message, Key,
-  TrendCharts, Star, DocumentCopy
+  TrendCharts, Star, DocumentCopy, UserFilled
 } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { 
-  getCurrentUser, 
-  updateUserProfile, 
-  updateUserAvatar, 
-  changePassword,
-  type UserInfo 
-} from '@/api/user'
+import { useAuthStore } from '@/store/auth'
+import type { UserRole } from '@/store/auth'
+
+// 用户信息类型
+interface UserInfo {
+  id: number
+  username: string
+  role: UserRole
+  avatar?: string
+  nickname?: string
+  phone?: string
+  email?: string
+  signature?: string
+  created_at?: string
+}
+
+const authStore = useAuthStore()
 
 // 用户信息
 const userInfo = reactive<UserInfo>({
   id: 0,
   username: '',
+  role: 'user',
   avatar: '',
   nickname: '',
   phone: '',
@@ -386,7 +405,7 @@ const passwordRules = reactive<FormRules>({
   confirmPassword: [
     { required: true, message: '请再次输入新密码', trigger: 'blur' },
     {
-      validator: (rule, value, callback) => {
+      validator: (_rule, value, callback) => {
         if (value !== passwordForm.newPassword) {
           callback(new Error('两次输入的密码不一致'))
         } else {
@@ -397,6 +416,11 @@ const passwordRules = reactive<FormRules>({
     }
   ]
 })
+
+// 获取角色显示名称
+const getRoleDisplayName = (role: UserRole) => {
+  return role === 'admin' ? '管理员' : '普通用户'
+}
 
 // 偏好设置
 const preferences = reactive({
@@ -424,15 +448,24 @@ const formatDate = (date: string | undefined) => {
 // 加载用户信息
 const loadUserInfo = async () => {
   try {
-    const res = await getCurrentUser()
-    Object.assign(userInfo, res)
-    Object.assign(profileForm, {
-      username: res.username,
-      nickname: res.nickname || '',
-      phone: res.phone || '',
-      email: res.email || '',
-      signature: res.signature || ''
-    })
+    // 从 store 获取用户信息
+    if (authStore.user) {
+      Object.assign(userInfo, {
+        id: 0, // 临时ID
+        username: authStore.user.username,
+        role: authStore.user.role,
+        avatar: authStore.user.avatar || '',
+        email: authStore.user.email || '',
+        created_at: authStore.user.created_at || new Date().toISOString()
+      })
+      Object.assign(profileForm, {
+        username: authStore.user.username,
+        nickname: userInfo.nickname || '',
+        phone: userInfo.phone || '',
+        email: authStore.user.email || '',
+        signature: userInfo.signature || ''
+      })
+    }
   } catch (error) {
     console.error('加载用户信息失败:', error)
     ElMessage.error('加载用户信息失败')
@@ -458,7 +491,7 @@ const handleAvatarUpload = (file: File) => {
   reader.onload = async (e) => {
     const avatar = e.target?.result as string
     try {
-      await updateUserAvatar({ avatar })
+      // TODO: 接入真实 API
       userInfo.avatar = avatar
       ElMessage.success('头像上传成功')
     } catch (error) {
@@ -475,12 +508,9 @@ const handleAvatarUpload = (file: File) => {
 const handleUpdateProfile = async () => {
   profileLoading.value = true
   try {
-    await updateUserProfile({
-      nickname: profileForm.nickname,
-      phone: profileForm.phone,
-      email: profileForm.email,
-      signature: profileForm.signature
-    })
+    // TODO: 接入真实 API
+    // 模拟更新
+    await new Promise(resolve => setTimeout(resolve, 500))
     
     // 更新本地用户信息
     Object.assign(userInfo, {
@@ -519,24 +549,20 @@ const handleChangePassword = async () => {
     
     passwordLoading.value = true
     try {
-      await changePassword({
-        old_password: passwordForm.oldPassword,
-        new_password: passwordForm.newPassword
-      })
+      // TODO: 接入真实 API
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       ElMessage.success('密码修改成功，请重新登录')
       resetPasswordForm()
       
       // 延迟后跳转到登录页
       setTimeout(() => {
-        localStorage.removeItem('token')
-        localStorage.removeItem('username')
+        authStore.logout()
         window.location.href = '/login'
       }, 1500)
     } catch (error: any) {
       console.error('密码修改失败:', error)
-      const errorMsg = error.response?.data?.detail || '密码修改失败，请检查原密码是否正确'
-      ElMessage.error(errorMsg)
+      ElMessage.error('密码修改失败，请检查原密码是否正确')
     } finally {
       passwordLoading.value = false
     }

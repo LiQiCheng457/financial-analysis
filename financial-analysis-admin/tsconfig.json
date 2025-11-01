@@ -23,11 +23,9 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": [
-      "vite/client",
-      "element-plus/global",
-      "@types/qrcode",
-      "vite-plugin-svg-icons/client"
+    "typeRoots": [
+      "./types",
+      "./node_modules/@types"
     ]
   },
   "include": ["src", "types/**/*.d.ts"],

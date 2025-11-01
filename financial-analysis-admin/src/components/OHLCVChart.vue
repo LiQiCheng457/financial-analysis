@@ -118,8 +118,8 @@ function buildOption(dates: string[], ohlc: number[][], volumes: number[]) {
     },
     toolbox: { show: false },
     grid: [
-      { left: '10%', right: '8%', top: 20, height: '60%' },
-      { left: '10%', right: '8%', top: '72%', height: '18%' }
+      { left: 60, right: 60, top: 30, height: '60%' },
+      { left: 60, right: 60, top: '72%', height: '18%' }
     ],
     xAxis: [
       {
@@ -175,32 +175,56 @@ function renderChart() {
   chart.setOption(option)
 }
 
+let _resizeObserver: ResizeObserver | null = null
+
 onMounted(() => {
-  if (root.value) {
-    chart = echarts.init(root.value)
-    renderChart()
-    // listen to dataZoom events and emit visible-range
-    chart.on('datazoom', (e: any) => {
-      try {
-        const zr = e.batch && e.batch.length ? e.batch[0] : e
-        const start = (zr.start != null) ? zr.start : (e.start || 0)
-        const end = (zr.end != null) ? zr.end : (e.end || 100)
-        // start/end are percent; convert to index
-        if (currentDates && currentDates.length) {
-          const len = currentDates.length
-          const sIdx = Math.floor((start/100) * len)
-          const eIdx = Math.min(len-1, Math.ceil((end/100) * len)-1)
-          const startDate = currentDates[sIdx]
-          const endDate = currentDates[eIdx]
-          const startDateRaw = (currentRawRanges[sIdx] && currentRawRanges[sIdx][0]) || startDate
-          const endDateRaw = (currentRawRanges[eIdx] && currentRawRanges[eIdx][1]) || endDate
-          emit('visible-range', { startIndex: sIdx, endIndex: eIdx, startDate, endDate, startDateRaw, endDateRaw })
+  if (!root.value) return
+
+  const tryInit = () => {
+    try {
+      if (!root.value) return false
+      const w = root.value.clientWidth
+      const h = root.value.clientHeight
+      if (!w || !h) return false
+      chart = echarts.init(root.value)
+      renderChart()
+      // listen to dataZoom events and emit visible-range
+      chart.on('datazoom', (e: any) => {
+        try {
+          const zr = e.batch && e.batch.length ? e.batch[0] : e
+          const start = (zr.start != null) ? zr.start : (e.start || 0)
+          const end = (zr.end != null) ? zr.end : (e.end || 100)
+          // start/end are percent; convert to index
+          if (currentDates && currentDates.length) {
+            const len = currentDates.length
+            const sIdx = Math.floor((start/100) * len)
+            const eIdx = Math.min(len-1, Math.ceil((end/100) * len)-1)
+            const startDate = currentDates[sIdx]
+            const endDate = currentDates[eIdx]
+            const startDateRaw = (currentRawRanges[sIdx] && currentRawRanges[sIdx][0]) || startDate
+            const endDateRaw = (currentRawRanges[eIdx] && currentRawRanges[eIdx][1]) || endDate
+            emit('visible-range', { startIndex: sIdx, endIndex: eIdx, startDate, endDate, startDateRaw, endDateRaw })
+          }
+        } catch (err) {
+          // ignore
         }
-      } catch (err) {
-        // ignore
+      })
+      window.addEventListener('resize', () => chart && chart.resize())
+      return true
+    } catch (err) {
+      return false
+    }
+  }
+
+  // try immediate init; otherwise observe size changes
+  if (!tryInit()) {
+    _resizeObserver = new ResizeObserver(() => {
+      if (tryInit() && _resizeObserver && root.value) {
+        _resizeObserver.disconnect()
+        _resizeObserver = null
       }
     })
-    window.addEventListener('resize', () => chart && chart.resize())
+    _resizeObserver.observe(root.value)
   }
 })
 
@@ -209,7 +233,13 @@ onBeforeUnmount(() => {
     chart.dispose()
     chart = null
   }
-  window.removeEventListener('resize', () => chart && chart.resize())
+  try {
+    window.removeEventListener('resize', () => chart && chart.resize())
+  } catch (e) {}
+  if (_resizeObserver && root.value) {
+    try { _resizeObserver.disconnect() } catch (e) {}
+    _resizeObserver = null
+  }
 })
 
 watch(() => [props.data, props.period], () => {
@@ -239,7 +269,13 @@ function getVisibleRange() {
   return null
 }
 
-defineExpose({ getVisibleRange })
+function resize() {
+  if (chart) {
+    chart.resize()
+  }
+}
+
+defineExpose({ getVisibleRange, resize })
 </script>
 
 <style scoped>

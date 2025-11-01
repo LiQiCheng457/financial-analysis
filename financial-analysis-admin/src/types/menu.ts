@@ -4,4 +4,5 @@ export interface MenuItem {
   path?: string
   icon?: string
   children?: MenuItem[]
+  adminOnly?: boolean
 }

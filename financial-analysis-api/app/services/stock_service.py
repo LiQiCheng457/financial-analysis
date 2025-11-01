@@ -11,13 +11,42 @@ try:
 except Exception:
     ak = None
 
+# ensure Optional is available for the module-level annotation
+from typing import Optional
+
+# When get_stock_history_data encounters an exception while fetching remote data,
+# store the last error message here so API handlers can return a more informative
+# response instead of silently returning an empty list.
+last_stock_history_error: Optional[str] = None
+
+# Simple in-memory cache for historical data to reduce latency on repeated queries.
+# Keyed by (code,start_date,end_date,adjust,source). Values are tuples (ts, records).
+# use built-in dict here so annotation doesn't depend on typing imports order
+_history_cache: dict = {}
+# cache TTL in seconds (default 1 hour)
+CACHE_TTL_SECS = 60 * 60
+# maximum number of cached entries to keep
+CACHE_MAX_ENTRIES = 1000
+
+# fetch retry configuration
+# reduce default attempts to avoid excessive warnings; can be tuned
+MAX_FETCH_ATTEMPTS = 2
+BACKOFF_SECONDS = [0.5, 1.0]
+
+# module logger
+import logging
+logger = logging.getLogger(__name__)
+
 import pandas as pd
 import numpy as np
 import math
 import traceback
+import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import text
+import decimal
+from app.core.database import engine
 
 
 def _safe_number(x: Any) -> Any:
@@ -30,6 +59,24 @@ def _safe_number(x: Any) -> Any:
             if np.isnan(x) or np.isinf(x):
                 return None
             return float(x)
+        # handle percentage strings like '1.23%' or '-0.56%'
+        if isinstance(x, str):
+            s = x.strip()
+            if s == '' or s == '--' or s.lower() == 'nan':
+                return None
+            # remove thousands separators
+            s2 = s.replace(',', '')
+            # parentheses for negative numbers: (1.23) -> -1.23
+            if s2.startswith('(') and s2.endswith(')'):
+                s2 = '-' + s2[1:-1]
+            try:
+                if s2.endswith('%'):
+                    return float(s2.rstrip('%'))
+                # try plain float conversion
+                return float(s2)
+            except Exception:
+                # fall through to return original string if not numeric
+                pass
         if pd.isna(x):
             return None
         return x
@@ -190,6 +237,12 @@ def _to_json_safe(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     nr[k] = None
                 else:
                     nr[k] = float(v)
+            elif isinstance(v, decimal.Decimal):
+                # convert Decimal to float when possible, fallback to string
+                try:
+                    nr[k] = float(v)
+                except Exception:
+                    nr[k] = str(v)
             elif isinstance(v, (int, str, bool)):
                 nr[k] = v
             else:
@@ -425,144 +478,173 @@ def _standardize_history_columns(df: pd.DataFrame, code: str) -> pd.DataFrame:
 
 
 def get_stock_history_data(code: str, start_date: Optional[str] = None, end_date: Optional[str] = None, adjust: str = "", source: str = 'eastmoney') -> List[Dict[str, Any]]:
-    """从多个来源获取 A 股历史日线并返回 JSON-safe 的记录列表。
+    """从数据库表 stock_daily_data 中读取历史日线数据并返回 JSON-safe 的记录列表。
 
-    参数:
-    - code: 股票代码(如 '000001' 或 'sh600000')
-    - start_date,end_date: YYYYMMDD 格式，可选
-    - adjust: '' | 'qfq' | 'hfq'
-    - source: 'eastmoney' | 'sina' | 'tencent'（默认 eastmoney）
+    说明：项目中历史数据已统一存为不复权原始数据（unadjusted），因此该函数忽略 adjust/source 参数，
+    仅根据 code/日期区间返回存库数据。返回字段会标准化（中文列名）以兼容前端。
     """
+    global last_stock_history_error, _history_cache
+    last_stock_history_error = None
+
+    # build cache key (still keep lightweight cache)
+    try:
+        cache_key = f"db|{code}|{start_date or ''}|{end_date or ''}"
+        if cache_key in _history_cache:
+            ts, cached = _history_cache[cache_key]
+            if time.time() - ts < CACHE_TTL_SECS:
+                logger.debug("get_stock_history_data (db): cache hit for %s", cache_key)
+                return list(cached)
+            else:
+                _history_cache.pop(cache_key, None)
+    except Exception:
+        logger.debug("history cache check failed", exc_info=True)
+
     try:
         if not code:
             return []
 
-
-        def search_stocks(query: str, limit: int = 20) -> List[Dict[str, Any]]:
-            """搜索股票（按代码或名称模糊匹配）。
-
-            若环境中安装并可用 akshare，会尝试从常见的 A 股列表中搜索；否则返回空列表。
-            返回格式: [{ 'code': '600519', 'name': '贵州茅台' }, ...]
-            """
-            try:
-                if not query:
-                    return []
-                q = str(query).strip()
-                if ak is None:
-                    return []
-
-                # Try to load a list of A-share codes/names and filter
-                # ak.stock_zh_a_spot provides real-time snapshot; fallback to other available methods
-                df = None
-                if hasattr(ak, 'stock_zh_a_spot'):
-                    try:
-                        df = ak.stock_zh_a_spot()
-                    except Exception:
-                        df = None
-
-                # If df is available, try to extract code/name columns
-                results: List[Dict[str, Any]] = []
-                if df is not None:
-                    # normalise columns
-                    cols = [c.lower() for c in df.columns]
-                    # try to find code and name columns
-                    code_col = None
-                    name_col = None
-                    for c in df.columns:
-                        lc = str(c).lower()
-                        if 'code' in lc or '股票代码' in lc or '代码' in lc:
-                            code_col = c
-                        if 'name' in lc or '股票名称' in lc or '名称' in lc:
-                            name_col = c
-                    if code_col is None and '代码' in df.columns:
-                        code_col = '代码'
-                    if name_col is None and '名称' in df.columns:
-                        name_col = '名称'
-
-                    if code_col is None or name_col is None:
-                        # try common keys
-                        for c in df.columns:
-                            if str(c).lower() in ('code', 'symbol') and code_col is None:
-                                code_col = c
-                            if str(c).lower() in ('name', 'stock_name') and name_col is None:
-                                name_col = c
-
-                    # fallback: use first two columns
-                    if code_col is None:
-                        code_col = df.columns[0]
-                    if name_col is None and len(df.columns) > 1:
-                        name_col = df.columns[1]
-
-                    # do case-insensitive contains filter on code or name
-                    for _, row in df.iterrows():
-                        try:
-                            code_val = str(row.get(code_col, '')).strip()
-                            name_val = str(row.get(name_col, '')).strip()
-                            if q in code_val or q in name_val:
-                                results.append({'code': code_val, 'name': name_val})
-                                if len(results) >= limit:
-                                    break
-                        except Exception:
-                            continue
-
-                return results
-            except Exception as e:
-                print(f"search_stocks error: {e}")
-                return []
-
-        code_str = str(code)
-
-        # 构造不同源可能需要的符号
-        def to_exchange_prefixed(sym: str) -> str:
-            s = sym.lower()
-            if s.startswith('sh') or s.startswith('sz'):
-                return s
-            if s.startswith('6'):
-                return 'sh' + s
-            return 'sz' + s
-
-        sina_symbol = to_exchange_prefixed(code_str)
-        tencent_symbol = sina_symbol
-        east_symbol = code_str[-6:] if len(code_str) >= 6 else code_str
-
-        if ak is None:
-            return []
-
-        df = None
-        if source == 'sina':
-            if hasattr(ak, 'stock_zh_a_daily'):
-                df = ak.stock_zh_a_daily(symbol=sina_symbol, start_date=start_date, end_date=end_date, adjust=adjust)
-        elif source == 'tencent':
-            if hasattr(ak, 'stock_zh_a_hist_tx'):
-                df = ak.stock_zh_a_hist_tx(symbol=tencent_symbol, start_date=start_date, end_date=end_date, adjust=adjust)
+        # normalize possible stock_code formats stored in DB
+        c = str(code).strip()
+        candidates = set()
+        # if provided like 'sh600000' or 'SH600000'
+        if c.lower().startswith('sh') or c.lower().startswith('sz'):
+            candidates.add(c.upper())
+            candidates.add(c.lower())
+            # also add 6-digit form
+            candidates.add(c[-6:])
         else:
-            # eastmoney
-            if hasattr(ak, 'stock_zh_a_hist'):
-                df = ak.stock_zh_a_hist(symbol=east_symbol, period='daily', start_date=start_date, end_date=end_date, adjust=adjust)
+            # add prefixed forms and raw
+            if c.isdigit() and len(c) == 6:
+                candidates.add(c)
+                candidates.add('SZ' + c)
+                candidates.add('SH' + c)
+            else:
+                candidates.add(c)
 
-        if df is None or (isinstance(df, pd.DataFrame) and df.empty):
-            return []
-
-        # 标准化列并清洗
-        if isinstance(df, pd.DataFrame):
-            df2 = _standardize_history_columns(df, code_str)
-        else:
+        # prepare date filters
+        date_where = ''
+        params: Dict[str, Any] = {}
+        if start_date:
+            # expect YYYYMMDD -> convert to YYYY-MM-DD
             try:
-                df2 = pd.DataFrame(df)
-                df2 = _standardize_history_columns(df2, code_str)
+                sd = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}"
+                date_where += " AND trade_date >= :start_date"
+                params['start_date'] = sd
             except Exception:
-                return []
+                pass
+        if end_date:
+            try:
+                ed = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+                date_where += " AND trade_date <= :end_date"
+                params['end_date'] = ed
+            except Exception:
+                pass
 
-        cleaned = _clean_dataframe(df2)
+        # build SQL with candidate matches
+        cand_list = list(candidates)
+        # use parameterized IN list
+        placeholders = ','.join([f":c{i}" for i in range(len(cand_list))])
+        for i, val in enumerate(cand_list):
+            params[f'c{i}'] = val
+
+        sql = f"""
+            SELECT trade_date, open_price, high_price, low_price, close_price, pre_close,
+                   change_amount, pct_chg, volume, amount
+            FROM stock_daily_data
+            WHERE stock_code IN ({placeholders}) {date_where}
+            ORDER BY trade_date ASC
+        """
+
+        with engine.connect() as conn:
+            res = conn.execute(text(sql), params)
+            # use mappings() to get dict-like rows (prevents tuple rows that cause dict() failures)
+            try:
+                rows = res.mappings().fetchall()
+            except Exception:
+                # fallback to raw fetchall and convert using _mapping if available
+                raw_rows = res.fetchall()
+                rows = []
+                for r in raw_rows:
+                    try:
+                        # SQLAlchemy Row may expose _mapping
+                        rows.append(r._mapping if hasattr(r, '_mapping') else dict(r))
+                    except Exception:
+                        # last resort: build dict from keys and values
+                        try:
+                            keys = res.keys()
+                            rows.append({k: v for k, v in zip(keys, r)})
+                        except Exception:
+                            # give up and append empty
+                            rows.append({})
+
+        if not rows:
+            return []
+
+        # convert to DataFrame for reuse of standardization/cleaning
+        df = pd.DataFrame([dict(r) for r in rows])
+        # rename DB columns to friendly names so _standardize_history_columns can map them
+        # ensure column names include date/open/close/high/low/volume/amount
+        rename_map = {
+            'trade_date': '日期',
+            'open_price': '开盘',
+            'high_price': '最高',
+            'low_price': '最低',
+            'close_price': '收盘',
+            'pre_close': '昨收',
+            'change_amount': '涨跌额',
+            'pct_chg': '涨跌幅',
+            'volume': '成交量',
+            'amount': '成交额'
+        }
+        try:
+            df = df.rename(columns=rename_map)
+        except Exception:
+            pass
+
+        # ensure 日期 formatted
+        try:
+            if '日期' in df.columns:
+                df['日期'] = pd.to_datetime(df['日期']).dt.strftime('%Y-%m-%d')
+        except Exception:
+            df['日期'] = df['日期'].astype(str)
+
+        # run cleaning to normalize numeric types and NaN
+        cleaned = _clean_dataframe(df)
         records = cleaned.to_dict(orient='records')
+
+        # cache
+        try:
+            _history_cache[cache_key] = (time.time(), list(records))
+            if len(_history_cache) > CACHE_MAX_ENTRIES:
+                oldest = min(_history_cache.items(), key=lambda kv: kv[1][0])[0]
+                _history_cache.pop(oldest, None)
+        except Exception:
+            pass
+
         return _to_json_safe(records)
     except Exception as e:
-        print(f"Error in get_stock_history_data: {e}")
+        import traceback as _tb
+        tb = _tb.format_exc()
+        last_stock_history_error = str(e)
+        logger.error("Error in get_stock_history_data (db): %s", last_stock_history_error)
+        logger.debug("Full traceback:\n%s", tb)
         return []
 
 
-def search_companies_by_industry(db, q: str, page: int = 1, page_size: int = 50, industry: str = None) -> Dict[str, Any]:
-    """按关键词和/或行业搜索公司列表（支持分页）
+def search_companies_by_industry(
+    db, 
+    q: str, 
+    page: int = 1, 
+    page_size: int = 50, 
+    industry: str = None,
+    industry_match_mode: str = 'any',
+    search_mode: str = 'fuzzy',
+    min_capital: float = None,
+    max_capital: float = None,
+    region: str = None,
+    security_types: str = None
+) -> Dict[str, Any]:
+    """按关键词和/或行业搜索公司列表（支持分页和高级筛选）
 
     参数:
     - db: 数据库会话
@@ -570,6 +652,12 @@ def search_companies_by_industry(db, q: str, page: int = 1, page_size: int = 50,
     - page: 页码（从1开始）
     - page_size: 每页数量（默认50）
     - industry: 行业筛选（逗号分隔，支持多个），如 "电子,计算机,通信"
+    - industry_match_mode: 'any'(满足任一) 或 'all'(满足全部)
+    - search_mode: 'fuzzy'(模糊) 或 'exact'(精准)
+    - min_capital: 最小注册资本（元）
+    - max_capital: 最大注册资本（元）
+    - region: 地区筛选
+    - security_types: 证券类型筛选（逗号分隔）
 
     返回:
     {
@@ -605,41 +693,116 @@ def search_companies_by_industry(db, q: str, page: int = 1, page_size: int = 50,
         where_conditions = []
         params = {}
 
-        # 关键字搜索（原有逻辑）
+        # 关键字搜索
         if q:
-            likeq = f"%{q}%"
-            where_conditions.append("""
-                (stock_code LIKE :likeq 
-                OR company_name LIKE :likeq 
-                OR a_stock_abbr LIKE :likeq
-                OR eastmoney_industry LIKE :likeq 
-                OR regulatory_industry LIKE :likeq)
-            """)
-            params['likeq'] = likeq
-            params['q'] = q
+            if search_mode == 'exact':
+                # 精准匹配
+                where_conditions.append("""
+                    (stock_code = :exact_q 
+                    OR company_name = :exact_q 
+                    OR a_stock_abbr = :exact_q)
+                """)
+                params['exact_q'] = q
+            else:
+                # 模糊搜索
+                likeq = f"%{q}%"
+                where_conditions.append("""
+                    (stock_code LIKE :likeq 
+                    OR company_name LIKE :likeq 
+                    OR a_stock_abbr LIKE :likeq
+                    OR eastmoney_industry LIKE :likeq 
+                    OR regulatory_industry LIKE :likeq)
+                """)
+                params['likeq'] = likeq
+                params['q'] = q
 
-        # 行业筛选（新增逻辑 - OR 条件）
+        # 行业筛选
         if industry:
             industries = [ind.strip() for ind in industry.split(',') if ind.strip()]
             if industries:
-                industry_or_conditions = []
-                for i, ind in enumerate(industries):
-                    key_east = f'ind_east_{i}'
-                    key_reg = f'ind_reg_{i}'
-                    industry_or_conditions.append(f"""
-                        (eastmoney_industry LIKE :{key_east} OR regulatory_industry LIKE :{key_reg})
-                    """)
-                    params[key_east] = f"%{ind}%"
-                    params[key_reg] = f"%{ind}%"
+                if industry_match_mode == 'all':
+                    # 满足全部标签（AND关系）
+                    for i, ind in enumerate(industries):
+                        key_east = f'ind_east_{i}'
+                        key_reg = f'ind_reg_{i}'
+                        where_conditions.append(f"""
+                            (eastmoney_industry LIKE :{key_east} 
+                             OR regulatory_industry LIKE :{key_reg})
+                        """)
+                        params[key_east] = f"%{ind}%"
+                        params[key_reg] = f"%{ind}%"
+                else:
+                    # 满足任一标签（OR关系）
+                    industry_or_conditions = []
+                    for i, ind in enumerate(industries):
+                        key_east = f'ind_east_{i}'
+                        key_reg = f'ind_reg_{i}'
+                        industry_or_conditions.append(f"""
+                            (eastmoney_industry LIKE :{key_east} 
+                             OR regulatory_industry LIKE :{key_reg})
+                        """)
+                        params[key_east] = f"%{ind}%"
+                        params[key_reg] = f"%{ind}%"
+                    
+                    if industry_or_conditions:
+                        where_conditions.append(f"({' OR '.join(industry_or_conditions)})")
+
+        # 注册资本范围筛选
+        # 数据库中存储格式：数字+单位（如 "194.1亿"、"119.3亿"、"1.324亿"）
+        # 需要提取数字部分并根据单位换算为元
+        if min_capital is not None:
+            where_conditions.append("""
+                (CASE 
+                    WHEN registered_capital LIKE '%亿%' THEN 
+                        CAST(REPLACE(REPLACE(registered_capital, '亿', ''), ' ', '') AS DECIMAL(20, 2)) * 100000000
+                    WHEN registered_capital LIKE '%万%' THEN 
+                        CAST(REPLACE(REPLACE(registered_capital, '万', ''), ' ', '') AS DECIMAL(20, 2)) * 10000
+                    WHEN registered_capital LIKE '%元%' THEN 
+                        CAST(REPLACE(REPLACE(registered_capital, '元', ''), ' ', '') AS DECIMAL(20, 2))
+                    ELSE 
+                        CAST(registered_capital AS DECIMAL(20, 2))
+                END) >= :min_capital
+            """)
+            params['min_capital'] = min_capital
+        
+        if max_capital is not None:
+            where_conditions.append("""
+                (CASE 
+                    WHEN registered_capital LIKE '%亿%' THEN 
+                        CAST(REPLACE(REPLACE(registered_capital, '亿', ''), ' ', '') AS DECIMAL(20, 2)) * 100000000
+                    WHEN registered_capital LIKE '%万%' THEN 
+                        CAST(REPLACE(REPLACE(registered_capital, '万', ''), ' ', '') AS DECIMAL(20, 2)) * 10000
+                    WHEN registered_capital LIKE '%元%' THEN 
+                        CAST(REPLACE(REPLACE(registered_capital, '元', ''), ' ', '') AS DECIMAL(20, 2))
+                    ELSE 
+                        CAST(registered_capital AS DECIMAL(20, 2))
+                END) <= :max_capital
+            """)
+            params['max_capital'] = max_capital
+
+        # 地区筛选
+        if region:
+            where_conditions.append("region LIKE :region")
+            params['region'] = f"%{region}%"
+
+        # 证券类型筛选
+        if security_types:
+            types = [t.strip() for t in security_types.split(',') if t.strip()]
+            if types:
+                type_conditions = []
+                for i, stype in enumerate(types):
+                    key = f'stype_{i}'
+                    type_conditions.append(f"security_category LIKE :{key}")
+                    params[key] = f"%{stype}%"
                 
-                if industry_or_conditions:
-                    where_conditions.append(f"({' OR '.join(industry_or_conditions)})")
+                if type_conditions:
+                    where_conditions.append(f"({' OR '.join(type_conditions)})")
 
         # 组合 WHERE 子句
         where_clause = ' AND '.join(where_conditions) if where_conditions else '1=1'
 
         with db.begin():
-            # 使用 DISTINCT 去重（防止同一公司因多个行业匹配而重复）
+            # 使用 DISTINCT 去重
             count_sql = f"""
                 SELECT COUNT(DISTINCT stock_code) as total FROM stock_basic_info 
                 WHERE {where_clause}
@@ -665,7 +828,7 @@ def search_companies_by_industry(db, q: str, page: int = 1, page_size: int = 50,
 
             # 查询数据（使用 DISTINCT 去重，按优先级排序）
             order_clause = ""
-            if q:
+            if q and search_mode == 'fuzzy':
                 order_clause = f"""
                     ORDER BY 
                         CASE 
@@ -737,17 +900,60 @@ def get_company_profile(db, q: str) -> Optional[Dict[str, Any]]:
         with db.begin():
             # use mappings() to get a dict-like result across SQLAlchemy versions
             res = db.execute(text(sql_exact), {"q": q}).mappings().fetchone()
+            profile = None
             if res:
-                return dict(res)
+                profile = dict(res)
 
             # 模糊匹配 company_name 或 a_stock_code 或 a_stock_abbr
-            sql_like = f"SELECT {cols_sql} FROM stock_basic_info WHERE company_name LIKE :likeq OR a_stock_code LIKE :likeq OR a_stock_abbr LIKE :likeq LIMIT 1"
-            likeq = f"%{q}%"
-            res2 = db.execute(text(sql_like), {"likeq": likeq}).mappings().fetchone()
-            if res2:
-                return dict(res2)
+            if profile is None:
+                sql_like = f"SELECT {cols_sql} FROM stock_basic_info WHERE company_name LIKE :likeq OR a_stock_code LIKE :likeq OR a_stock_abbr LIKE :likeq LIMIT 1"
+                likeq = f"%{q}%"
+                res2 = db.execute(text(sql_like), {"likeq": likeq}).mappings().fetchone()
+                if res2:
+                    profile = dict(res2)
 
-        return None
+            if profile is None:
+                return None
+
+            # fetch related tables: shareholdings and issuer/issuance records
+            stock_code = profile.get('stock_code')
+            try:
+                # use actual column names in stock_shareholding_info (created_time / updated_time)
+                sh_sql = """
+                    SELECT id, enterprise_name, registered_capital, group_holding_ratio, created_time, updated_time
+                    FROM stock_shareholding_info
+                    WHERE stock_code = :stock_code
+                    ORDER BY updated_time DESC
+                """
+                sh_rows = db.execute(text(sh_sql), {"stock_code": stock_code}).mappings().fetchall()
+                shareholdings = [dict(r) for r in sh_rows] if sh_rows else []
+            except Exception:
+                logger.debug("Failed to query stock_shareholding_info for %s", stock_code, exc_info=True)
+                shareholdings = []
+
+            try:
+                # stock_issuer_info uses different column names (sponsor_institution, main_underwriter, establishment_date, listing_date, etc.)
+                issuer_sql = """
+                    SELECT id, sponsor_institution, main_underwriter, establishment_date, listing_date,
+                           issue_pe_ratio, online_issue_date, issue_method, face_value_per_share,
+                           issue_quantity, issue_price_per_share, issue_cost, total_issue_market_value,
+                           net_funds_raised, first_day_open_price, first_day_close_price, first_day_turnover_rate,
+                           first_day_high_price, offline_allotment_lottery_rate, pricing_lottery_rate, created_time, updated_time
+                    FROM stock_issuer_info
+                    WHERE stock_code = :stock_code
+                    ORDER BY listing_date DESC
+                """
+                issuer_rows = db.execute(text(issuer_sql), {"stock_code": stock_code}).mappings().fetchall()
+                issuance = [dict(r) for r in issuer_rows] if issuer_rows else []
+            except Exception:
+                logger.debug("Failed to query stock_issuer_info for %s", stock_code, exc_info=True)
+                issuance = []
+
+            # sanitize numeric/complex types to JSON-friendly primitives
+            profile['shareholdings'] = _to_json_safe(shareholdings)
+            profile['issuance'] = _to_json_safe(issuance)
+
+            return profile
     except Exception as e:
         print(f"get_company_profile error: {e}")
         return None

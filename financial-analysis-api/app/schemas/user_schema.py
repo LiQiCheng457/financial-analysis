@@ -5,12 +5,21 @@ from datetime import datetime
 class UserOut(BaseModel):
     id: int
     username: str
+    role: str = "user"
     avatar: Optional[str] = None
     nickname: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
     signature: Optional[str] = None
     created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserListOut(BaseModel):
+    items: list[UserOut]
+    total: int
 
     class Config:
         from_attributes = True

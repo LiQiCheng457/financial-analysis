@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException  # type: ignore[reportMissingImports]
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.auth_service import get_current_user, AuthService

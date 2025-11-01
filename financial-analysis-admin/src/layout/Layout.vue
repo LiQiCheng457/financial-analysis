@@ -32,6 +32,17 @@
       <el-header style="text-align: right; font-size: 12px">
         <div class="toolbar">
           <UserAvatar />
+          <div class="user-info-section">
+            <span class="username">{{ username }}</span>
+            <el-tag 
+              :type="authStore.isAdmin ? 'danger' : 'primary'" 
+              size="small" 
+              effect="dark"
+              class="role-tag"
+            >
+              {{ authStore.roleDisplayName }}
+            </el-tag>
+          </div>
           <el-dropdown>
             <el-icon style="margin-right: 8px; margin-top: 1px">
               <component :is="getIconComponent()" />
@@ -42,7 +53,6 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <span>{{ username }}</span>
         </div>
       </el-header>
 
@@ -81,6 +91,23 @@ onMounted(() => {
 
 // menu and icon helpers
 const menuItems = menuConfig
+
+// 根据角色过滤菜单项（如果项或子项设置了 adminOnly，则仅管理员可见）
+const filteredMenu = computed(() => {
+  const isAdmin = authStore.isAdmin
+  const filtered = menuItems
+    .map(item => {
+      if (item.children && item.children.length) {
+        const children = item.children.filter(c => !(c as any).adminOnly || isAdmin)
+        return { ...item, children }
+      }
+      // top-level item
+      if ((item as any).adminOnly && !isAdmin) return null
+      return item
+    })
+    .filter(Boolean) as typeof menuItems
+  return filtered
+})
 
 // explicit icon mapping to avoid heuristic mismatch
 // ICON_MAP imported from config/icon-map.ts
@@ -126,7 +153,7 @@ function getIconComponent(name?: string) {
 }
 
 // expose to template
-const menu = menuItems
+const menu = filteredMenu
 </script>
 
 <style scoped>
@@ -184,6 +211,22 @@ const menu = menuItems
   align-items: center;
   gap: 16px;
   color: white;
+}
+
+.user-info-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.username {
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.role-tag {
+  font-size: 12px;
 }
 
 .toolbar span {

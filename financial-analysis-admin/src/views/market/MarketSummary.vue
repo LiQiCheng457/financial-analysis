@@ -15,11 +15,13 @@
         </div>
       </template>
 
+      <!-- <CompanySearchPanel /> -->
+
       <!-- top row: navigator + windowSize + query controls (date picker on the right) -->
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-        <el-button size="mini" @click="prevDates">上一组</el-button>
-        <el-button size="mini" @click="centerToday">回到今天</el-button>
-        <el-button size="mini" @click="nextDates">下一组</el-button>
+  <el-button size="small" @click="prevDates">上一组</el-button>
+  <el-button size="small" @click="centerToday">回到今天</el-button>
+  <el-button size="small" @click="nextDates">下一组</el-button>
         <div style="margin-left:8px;display:flex;align-items:center;gap:6px">
           <span style="color:#909399">显示天数</span>
           <el-input-number :min="7" :max="60" v-model="windowSize" @change="onWindowSizeChange" size="small" />
@@ -83,6 +85,7 @@ import { getSseDailySummary, getTradeDates } from '@/api/stock'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+// import CompanySearchPanel from '@/components/business/CompanySearchPanel.vue'
 
 const queryDate = ref('')
 const actualDate = ref('')

@@ -14,3 +14,4 @@ class User(Base):
     email = Column(String(100), nullable=True)  # 邮箱
     signature = Column(String(200), nullable=True)  # 个性签名
     created_at = Column(DateTime, default=datetime.now)  # 注册时间
+    role = Column(String(20), default='user', nullable=False)  # 角色：admin 或 user

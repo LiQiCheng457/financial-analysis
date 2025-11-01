@@ -117,6 +117,7 @@ const handleLogin = async () => {
     if (valid) {
       try {
         await authStore.login(loginForm)
+        ElMessage.success(`欢迎回来，${authStore.user?.username}！`)
         await router.push('/')
       } catch (error) {
         ElMessage.error('登录失败，请检查用户名和密码')
@@ -202,7 +203,7 @@ const handleRegister = async () => {
 }
 
 .login-form-wrapper {
-  width: 320px;
+  width: 360px;
   padding: 20px;
 }
 

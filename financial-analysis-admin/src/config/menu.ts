@@ -12,11 +12,10 @@ const menu: MenuItem[] = [
     title: '行情中心',
     icon: 'document',
     children: [
-      { key: 'market-summary', title: '每日概况', path: '/market-summary' },
-      { key: 'stock-history', title: '历史行情数据', path: '/stock-history' },
-      { key: 'market-kline', title: 'K线图', path: '/market/kline' },
-      { key: 'market-timeseries', title: '分时图', path: '/market/timeseries' },
+      { key: 'market-summary', title: '每日概况', path: '/market/summary' },
+      { key: 'stock-history', title: '历史行情数据', path: '/stock/history' },
       { key: 'market-snapshot', title: '公司概括', path: '/market/snapshot' },
+      { key: 'market-technical', title: '技术指标分析', path: '/market/technical' },
     ],
   },
   {
@@ -59,12 +58,21 @@ const menu: MenuItem[] = [
     ],
   },
   {
+    key: 'strategy',
+    title: 'AI量化策略',
+    icon: 'trophy',
+    children: [
+      { key: 'strategy-industry-rotation', title: '行业轮动策略', path: '/strategy/industry-rotation' },
+    ],
+  },
+  {
     key: 'user',
     title: '用户系统',
     icon: 'user',
     children: [
       { key: 'user-profile', title: '个人中心', path: '/user/profile' },
-      { key: 'user-permissions', title: '权限管理', path: '/user/permissions' },
+      { key: 'admin-users', title: '用户管理', path: '/admin/users', adminOnly: true },
+      { key: 'user-permissions', title: '权限管理', path: '/user/permissions', adminOnly: true },
     ],
   },
 ]
