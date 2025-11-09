@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build",
+    "build:prod": "vite build --mode pro",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.ts,.jsx,.tsx --fix",
     "lint:check": "eslint . --ext .vue,.js,.ts,.jsx,.tsx",

@@ -9,6 +9,7 @@ import StockHistory from '@/views/stock/StockHistory.vue'
 import MarketSummary from '@/views/market/MarketSummary.vue'
 import Snapshot from '@/views/market/Snapshot.vue'
 import TechnicalAnalysis from '@/views/market/TechnicalAnalysis.vue'
+import ETFSpecial from '@/views/market/ETFSpecial.vue'
 
 import WatchlistCrud from '@/views/watchlist/Crud.vue'
 import WatchlistGroups from '@/views/watchlist/Groups.vue'
@@ -54,6 +55,7 @@ const routes = [
       },
       { path: 'market/snapshot', name: 'market-snapshot', component: Snapshot },
       { path: 'market/technical', name: 'market-technical', component: TechnicalAnalysis },
+      { path: 'market/etf', name: 'market-etf', component: ETFSpecial },
 
       { path: 'watchlist/crud', name: 'watchlist-crud', component: WatchlistCrud },
       { path: 'watchlist/groups', name: 'watchlist-groups', component: WatchlistGroups },

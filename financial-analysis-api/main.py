@@ -131,10 +131,26 @@ def create_app():
         except Exception as e:
             print(f"[startup] 自动更新调度启动失败: {e}")
 
-    # 跨域解决
+    # 读取允许跨域的地址，兼容本地和穿透域名
+    raw_origins = os.getenv("ALLOW_ORIGINS", "")
+    allowed_origins = [origin.strip().rstrip("/") for origin in raw_origins.split(",") if origin.strip()]
+
+    if not allowed_origins:
+        # 默认支持常见的本地调试地址，避免凭据模式与通配符冲突
+        allowed_origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:4174",
+            "http://127.0.0.1:4174",
+        ]
+
+        public_base = os.getenv("PUBLIC_API_BASE_URL", "").strip()
+        if public_base:
+            allowed_origins.append(public_base.rstrip("/"))
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # 允许所有来源，生产环境请替换为你的前端地址
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

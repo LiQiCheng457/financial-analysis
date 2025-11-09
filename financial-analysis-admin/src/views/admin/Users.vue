@@ -13,7 +13,7 @@
       </div>
 
       <el-table :data="users" stripe style="width:100%" row-key="id" empty-text="暂无用户">
-        <el-table-column prop="id" label="#" width="80" align="center" />
+        <el-table-column type="index" label="#" width="80" align="center" :index="indexMethod" />
         <el-table-column label="用户 / 昵称" min-width="200">
           <template #default="{ row }">
             <div class="user-cell">
@@ -55,12 +55,14 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-bar" style="margin-top:12px;">
+      <!-- 当总数大于每页数量时显示分页 -->
+      <div v-if="shouldShowPagination" class="pagination-bar">
         <el-pagination
-          background
+          v-model:current-page="page"
           :page-size="pageSize"
-          :current-page.sync="page"
           :total="total"
+          layout="prev, pager, next"
+          background
           @current-change="onPageChange"
         />
       </div>
@@ -77,15 +79,22 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import adminApi from '@/api/admin'
 
 const users = ref([] as any[])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 10
+const pageSize = ref(8)
 const searchQuery = ref('')
+
+// 计算是否显示分页
+const shouldShowPagination = computed(() => {
+  const show = total.value > 8
+  console.log('[Users] shouldShowPagination computed:', show, 'total=', total.value)
+  return show
+})
 
 import UserViewDialog from '@/components/admin/UserViewDialog.vue'
 import UserEditDialog from '@/components/admin/UserEditDialog.vue'
@@ -100,23 +109,33 @@ const selectedUser = ref<any | null>(null)
 
 const fetchUsers = async () => {
   try {
-    const params: any = { skip: (page.value - 1) * pageSize, limit: pageSize }
+    const params: any = { skip: (page.value - 1) * pageSize.value, limit: pageSize.value }
     if (searchQuery.value && searchQuery.value.trim()) params.q = searchQuery.value.trim()
     const res: any = await adminApi.listUsers(params)
+    
+    console.log('[Users] fetchUsers 响应:', res)
+    
     // expect { items: [], total: N }
     if (res && (res.items || res.data?.items)) {
       const payload = res.items || res.data.items
       users.value = payload
       total.value = res.total || res.data.total || payload.length
+      console.log('[Users] 用户列表:', payload.length, '总数:', total.value)
+      console.log('[Users] 是否显示分页?', total.value, '>', pageSize.value, '=', total.value > pageSize.value)
     } else if (Array.isArray(res)) {
       users.value = res
       total.value = res.length
+      console.log('[Users] 用户列表(数组):', res.length, '总数:', total.value)
+      console.log('[Users] 是否显示分页?', total.value, '>', pageSize.value, '=', total.value > pageSize.value)
     } else if (res && res.data && Array.isArray(res.data)) {
       users.value = res.data
       total.value = res.data.length
+      console.log('[Users] 用户列表(data数组):', res.data.length, '总数:', total.value)
+      console.log('[Users] 是否显示分页?', total.value, '>', pageSize.value, '=', total.value > pageSize.value)
     } else {
       users.value = []
       total.value = 0
+      console.log('[Users] 无用户数据')
     }
   } catch (e) {
     console.error(e)
@@ -282,16 +301,23 @@ const formatDate = (val: any) => {
   }
 }
 
+// helper: calculate row index for pagination
+const indexMethod = (index: number) => {
+  return (page.value - 1) * pageSize.value + index + 1
+}
+
 </script>
 
 <style scoped>
 .users-page {
   width: 100%;
   height: 100%;
+  overflow-y: auto;
 }
 
 .el-card {
-  height: 100%;
+  min-height: 100%;
+  height: auto;
 }
 
 /* 用户信息单元格 */
@@ -323,7 +349,16 @@ const formatDate = (val: any) => {
 /* 分页栏 */
 .pagination-bar {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  padding: 16px 0;
+}
+
+/* 让分页组件更醒目 */
+.pagination-bar :deep(.el-pagination) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

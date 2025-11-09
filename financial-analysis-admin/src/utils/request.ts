@@ -5,8 +5,9 @@ import type { ApiResponse } from '@/types'
 
 // 创建 axios 实例
 const service: AxiosInstance = axios.create({
-  baseURL: '/api', // Vite proxy 会将 /api 转发到后端
-  timeout: 10000 // 请求超时时间
+  // 支持环境变量配置 API 地址（用于 cpolar 等内网穿透）
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api', // 优先使用环境变量，否则使用 Vite proxy
+  timeout: 30000 // 请求超时时间（内网穿透可能较慢，增加到30秒）
 })
 
 // 请求拦截器

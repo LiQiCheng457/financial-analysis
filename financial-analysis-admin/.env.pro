@@ -4,6 +4,12 @@ VITE_NODE_ENV=production
 # 接口前缀，没用到
 # VITE_API_BASE_PATH=/api
 
+# 后端 API 地址（cpolar 内网穿透地址）
+# ⚠️ cpolar 免费版地址可能变化,请访问 http://localhost:9200 查看当前地址
+# 当前使用的后端地址需要在 cpolar 中配置为指向 localhost:8000
+# ⚠️ 注意：需要包含 /api 前缀，因为后端路由都在 /api 下
+VITE_API_BASE_URL=https://4509929a.r30.cpolar.top/api
+
 # 打包路径
 VITE_BASE_PATH=/
 

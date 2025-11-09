@@ -333,6 +333,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
+import { getCurrentUser, updateUserProfile, updateUserAvatar, changePassword } from '@/api/user'
 import { 
   User, Camera, Clock, Connection, Lock, Iphone, Message, Key,
   TrendCharts, Star, DocumentCopy, UserFilled
@@ -448,23 +449,74 @@ const formatDate = (date: string | undefined) => {
 // 加载用户信息
 const loadUserInfo = async () => {
   try {
-    // 从 store 获取用户信息
-    if (authStore.user) {
-      Object.assign(userInfo, {
-        id: 0, // 临时ID
-        username: authStore.user.username,
-        role: authStore.user.role,
-        avatar: authStore.user.avatar || '',
-        email: authStore.user.email || '',
-        created_at: authStore.user.created_at || new Date().toISOString()
-      })
-      Object.assign(profileForm, {
-        username: authStore.user.username,
-        nickname: userInfo.nickname || '',
-        phone: userInfo.phone || '',
-        email: authStore.user.email || '',
-        signature: userInfo.signature || ''
-      })
+    // 优先从后端获取最新用户信息，如果失败则回退到 store
+    try {
+      const res: any = await getCurrentUser()
+      if (res) {
+        const u = res as any
+        Object.assign(userInfo, {
+          id: u.id || 0,
+          username: u.username,
+          role: u.role,
+          avatar: u.avatar || '',
+          nickname: u.nickname || '',
+          phone: u.phone || '',
+          email: u.email || '',
+          signature: u.signature || '',
+          created_at: u.created_at || new Date().toISOString()
+        })
+        Object.assign(profileForm, {
+          username: userInfo.username,
+          nickname: userInfo.nickname || '',
+          phone: userInfo.phone || '',
+          email: userInfo.email || '',
+          signature: userInfo.signature || ''
+        })
+        // 更新 store 中的用户信息副本
+        authStore.user = authStore.user || {}
+        authStore.user.username = userInfo.username
+        authStore.user.role = userInfo.role as any
+        authStore.user.avatar = userInfo.avatar
+        authStore.user.email = userInfo.email
+      } else {
+        // 回退
+        if (authStore.user) {
+          Object.assign(userInfo, {
+            id: 0,
+            username: authStore.user.username,
+            role: authStore.user.role,
+            avatar: authStore.user.avatar || '',
+            email: authStore.user.email || '',
+            created_at: authStore.user.created_at || new Date().toISOString()
+          })
+          Object.assign(profileForm, {
+            username: authStore.user.username,
+            nickname: userInfo.nickname || '',
+            phone: userInfo.phone || '',
+            email: authStore.user.email || '',
+            signature: userInfo.signature || ''
+          })
+        }
+      }
+    } catch (e) {
+      // 若后端请求失败，使用 store 中已有信息
+      if (authStore.user) {
+        Object.assign(userInfo, {
+          id: 0,
+          username: authStore.user.username,
+          role: authStore.user.role,
+          avatar: authStore.user.avatar || '',
+          email: authStore.user.email || '',
+          created_at: authStore.user.created_at || new Date().toISOString()
+        })
+        Object.assign(profileForm, {
+          username: authStore.user.username,
+          nickname: userInfo.nickname || '',
+          phone: userInfo.phone || '',
+          email: authStore.user.email || '',
+          signature: userInfo.signature || ''
+        })
+      }
     }
   } catch (error) {
     console.error('加载用户信息失败:', error)
@@ -491,8 +543,16 @@ const handleAvatarUpload = (file: File) => {
   reader.onload = async (e) => {
     const avatar = e.target?.result as string
     try {
-      // TODO: 接入真实 API
-      userInfo.avatar = avatar
+      // 调用接口上传 avatar（后端期望 base64 字符串）
+      const resp: any = await updateUserAvatar({ avatar })
+      // 更新本地和 store
+      if (resp) {
+        userInfo.avatar = resp.avatar || avatar
+      } else {
+        userInfo.avatar = avatar
+      }
+      // 让 authStore 刷新
+      await authStore.fetchUser()
       ElMessage.success('头像上传成功')
     } catch (error) {
       console.error('头像上传失败:', error)
@@ -508,18 +568,23 @@ const handleAvatarUpload = (file: File) => {
 const handleUpdateProfile = async () => {
   profileLoading.value = true
   try {
-    // TODO: 接入真实 API
-    // 模拟更新
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // 更新本地用户信息
+    // 调用后端 API 更新资料
+    const payload = {
+      nickname: profileForm.nickname || undefined,
+      phone: profileForm.phone || undefined,
+      email: profileForm.email || undefined,
+      signature: profileForm.signature || undefined
+    }
+    await updateUserProfile(payload)
+    // 刷新 store 中用户信息
+    await authStore.fetchUser()
+    // 更新本地视图
     Object.assign(userInfo, {
       nickname: profileForm.nickname,
       phone: profileForm.phone,
       email: profileForm.email,
       signature: profileForm.signature
     })
-    
     ElMessage.success('个人资料更新成功')
   } catch (error) {
     console.error('更新失败:', error)
@@ -549,20 +614,19 @@ const handleChangePassword = async () => {
     
     passwordLoading.value = true
     try {
-      // TODO: 接入真实 API
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+      // 调用后端修改密码接口
+      await changePassword({ old_password: passwordForm.oldPassword, new_password: passwordForm.newPassword })
       ElMessage.success('密码修改成功，请重新登录')
       resetPasswordForm()
-      
-      // 延迟后跳转到登录页
+      // 延迟后登出并跳转登录页
       setTimeout(() => {
         authStore.logout()
         window.location.href = '/login'
       }, 1500)
     } catch (error: any) {
       console.error('密码修改失败:', error)
-      ElMessage.error('密码修改失败，请检查原密码是否正确')
+      const msg = error?.response?.data?.detail || error?.message || '密码修改失败，请检查原密码是否正确'
+      ElMessage.error(msg)
     } finally {
       passwordLoading.value = false
     }
@@ -585,6 +649,7 @@ onMounted(() => {
 <style scoped>
 .profile-container {
   animation: fadeIn 0.4s ease;
+  padding: 0 16px;
 }
 
 @keyframes fadeIn {
@@ -637,6 +702,7 @@ onMounted(() => {
 .user-info {
   flex: 1;
   color: white;
+  min-width: 0;
 }
 
 .username {
@@ -644,6 +710,7 @@ onMounted(() => {
   font-weight: 700;
   margin: 0 0 16px 0;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  word-break: break-word;
 }
 
 .user-meta {
@@ -730,6 +797,7 @@ onMounted(() => {
 
 .stat-info {
   flex: 1;
+  min-width: 0;
 }
 
 .stat-value {
@@ -744,16 +812,56 @@ onMounted(() => {
   color: #909399;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
+/* 平板适配 (768px - 1024px) */
+@media (max-width: 1024px) {
   .profile-header :deep(.el-card__body) {
-    padding: 24px;
+    padding: 32px;
+  }
+  
+  .header-content {
+    gap: 30px;
+  }
+  
+  .username {
+    font-size: 1.75rem;
+  }
+  
+  .tab-content {
+    padding: 16px;
+  }
+}
+
+/* 手机适配 (小于 768px) */
+@media (max-width: 768px) {
+  .profile-container {
+    padding: 0 8px;
+  }
+  
+  .profile-header {
+    margin-bottom: 16px;
+  }
+  
+  .profile-header :deep(.el-card__body) {
+    padding: 24px 16px;
   }
   
   .header-content {
     flex-direction: column;
     text-align: center;
-    gap: 24px;
+    gap: 20px;
+  }
+  
+  .avatar-section {
+    width: 100%;
+  }
+  
+  .user-avatar {
+    width: 100px !important;
+    height: 100px !important;
+  }
+  
+  .user-avatar :deep(.el-icon) {
+    font-size: 50px !important;
   }
   
   .username {
@@ -762,10 +870,17 @@ onMounted(() => {
   
   .user-meta {
     justify-content: center;
+    font-size: 13px;
+  }
+  
+  .user-meta :deep(.el-tag) {
+    font-size: 12px;
+    padding: 4px 8px;
   }
   
   .tab-content {
-    padding: 12px;
+    padding: 12px 8px;
+    min-height: 300px;
   }
   
   .profile-form,
@@ -773,6 +888,127 @@ onMounted(() => {
   .preferences-form,
   .subscriptions-form {
     max-width: 100%;
+  }
+  
+  .profile-form :deep(.el-form-item__label),
+  .security-form :deep(.el-form-item__label),
+  .preferences-form :deep(.el-form-item__label),
+  .subscriptions-form :deep(.el-form-item__label) {
+    width: 80px !important;
+    font-size: 14px;
+  }
+  
+  .stat-card {
+    padding: 16px;
+  }
+  
+  .stat-icon {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .stat-icon :deep(.el-icon) {
+    font-size: 24px;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  .stat-label {
+    font-size: 0.85rem;
+  }
+}
+
+/* 超小屏幕适配 (小于 480px) */
+@media (max-width: 480px) {
+  .profile-header :deep(.el-card__body) {
+    padding: 20px 12px;
+  }
+  
+  .username {
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+  }
+  
+  .user-meta {
+    gap: 8px;
+  }
+  
+  .user-meta :deep(.el-tag) {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+  
+  .profile-tabs :deep(.el-tabs__item) {
+    font-size: 14px;
+    padding: 0 12px;
+  }
+  
+  .tab-content {
+    padding: 8px 4px;
+  }
+  
+  .profile-form :deep(.el-form-item__label),
+  .security-form :deep(.el-form-item__label),
+  .preferences-form :deep(.el-form-item__label),
+  .subscriptions-form :deep(.el-form-item__label) {
+    width: 70px !important;
+    font-size: 13px;
+  }
+  
+  .profile-form :deep(.el-input__inner),
+  .security-form :deep(.el-input__inner) {
+    font-size: 14px;
+  }
+  
+  .security-alert {
+    margin-bottom: 16px;
+  }
+  
+  .security-alert :deep(.el-alert__title) {
+    font-size: 13px;
+  }
+  
+  .security-alert :deep(.el-alert__description) {
+    font-size: 12px;
+  }
+  
+  .stat-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 12px;
+  }
+  
+  .stat-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 600px) and (orientation: landscape) {
+  .profile-header :deep(.el-card__body) {
+    padding: 20px;
+  }
+  
+  .header-content {
+    gap: 20px;
+  }
+  
+  .user-avatar {
+    width: 80px !important;
+    height: 80px !important;
+  }
+  
+  .username {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+  }
+  
+  .tab-content {
+    min-height: 250px;
   }
 }
 </style>

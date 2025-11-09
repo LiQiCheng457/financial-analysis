@@ -177,10 +177,12 @@ const handleRegister = async () => {
   text-align: center;
   color: white;
   z-index: 1;
+  padding: 20px;
 }
 
 .intro-image {
   width: 350px;
+  max-width: 80%;
   margin-bottom: 20px;
 }
 
@@ -200,10 +202,13 @@ const handleRegister = async () => {
   justify-content: center;
   align-items: center;
   background-color: #ffffff;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .login-form-wrapper {
   width: 360px;
+  max-width: 100%;
   padding: 20px;
 }
 
@@ -223,13 +228,111 @@ const handleRegister = async () => {
   margin-top: 10px;
 }
 
-/* 响应式设计：在小屏幕上隐藏左侧 */
+/* 平板横屏 (768px - 1024px) */
+@media (max-width: 1024px) {
+  .intro-image {
+    width: 280px;
+  }
+  
+  .intro-title {
+    font-size: 2rem;
+  }
+  
+  .intro-description {
+    font-size: 1rem;
+  }
+  
+  .login-right {
+    width: 450px;
+  }
+  
+  .login-form-wrapper {
+    width: 320px;
+  }
+}
+
+/* 平板竖屏和手机横屏 (小于 992px) */
 @media (max-width: 992px) {
   .login-left {
     display: none;
   }
+  
   .login-right {
     width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+  
+  .login-form-wrapper {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* 手机竖屏 (小于 768px) */
+@media (max-width: 768px) {
+  .login-right {
+    padding: 16px;
+  }
+  
+  .login-form-wrapper {
+    width: 100%;
+    max-width: 400px;
+    padding: 24px;
+  }
+  
+  .form-title {
+    font-size: 1.5rem;
+    margin-bottom: 24px;
+  }
+}
+
+/* 超小屏幕 (小于 480px) */
+@media (max-width: 480px) {
+  .login-right {
+    padding: 12px;
+  }
+  
+  .login-form-wrapper {
+    padding: 20px;
+  }
+  
+  .form-title {
+    font-size: 1.3rem;
+    margin-bottom: 20px;
+  }
+  
+  :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
+  
+  :deep(.el-input__inner) {
+    font-size: 14px;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 600px) and (orientation: landscape) {
+  .login-container {
+    overflow-y: auto;
+  }
+  
+  .login-right {
+    padding: 12px;
+  }
+  
+  .login-form-wrapper {
+    padding: 16px;
+  }
+  
+  .form-title {
+    font-size: 1.3rem;
+    margin-bottom: 16px;
+  }
+  
+  :deep(.el-form-item) {
+    margin-bottom: 12px;
   }
 }
 </style>

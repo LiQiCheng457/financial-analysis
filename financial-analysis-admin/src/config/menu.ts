@@ -16,6 +16,8 @@ const menu: MenuItem[] = [
       { key: 'stock-history', title: '历史行情数据', path: '/stock/history' },
       { key: 'market-snapshot', title: '公司概括', path: '/market/snapshot' },
       { key: 'market-technical', title: '技术指标分析', path: '/market/technical' },
+      { key: 'market-etf', title: 'ETF专题', path: '/market/etf' },
+      
     ],
   },
   {

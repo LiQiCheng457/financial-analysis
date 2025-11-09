@@ -1,0 +1,367 @@
+/**
+ * 全局响应式样式
+ * 统一管理移动端、平板和桌面端的适配
+ */
+
+/* ========== 断点定义 ========== */
+/* 
+  xs: < 480px   超小屏幕(手机竖屏)
+  sm: 480-768px 小屏幕(手机横屏/小平板)
+  md: 768-1024px 中等屏幕(平板)
+  lg: 1024-1440px 大屏幕(桌面)
+  xl: > 1440px 超大屏幕(大桌面)
+*/
+
+/* ========== 全局容器适配 ========== */
+.container-responsive {
+  width: 100%;
+  padding-left: 20px;
+  padding-right: 20px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .container-responsive {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container-responsive {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+/* ========== 文字大小适配 ========== */
+.text-responsive-xl {
+  font-size: 2rem;
+}
+
+.text-responsive-lg {
+  font-size: 1.5rem;
+}
+
+.text-responsive-md {
+  font-size: 1.25rem;
+}
+
+.text-responsive-sm {
+  font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+  .text-responsive-xl {
+    font-size: 1.5rem;
+  }
+  
+  .text-responsive-lg {
+    font-size: 1.25rem;
+  }
+  
+  .text-responsive-md {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .text-responsive-xl {
+    font-size: 1.3rem;
+  }
+  
+  .text-responsive-lg {
+    font-size: 1.1rem;
+  }
+  
+  .text-responsive-md {
+    font-size: 1rem;
+  }
+  
+  .text-responsive-sm {
+    font-size: 0.9rem;
+  }
+}
+
+/* ========== 间距适配 ========== */
+.spacing-responsive {
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .spacing-responsive {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .spacing-responsive {
+    padding: 12px;
+  }
+}
+
+/* ========== 显示/隐藏工具类 ========== */
+/* 桌面端显示，移动端隐藏 */
+.hide-on-mobile {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+/* 移动端显示，桌面端隐藏 */
+.show-on-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .show-on-mobile {
+    display: block !important;
+  }
+}
+
+/* 平板显示，其他隐藏 */
+.show-on-tablet {
+  display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .show-on-tablet {
+    display: block !important;
+  }
+}
+
+/* ========== 卡片适配 ========== */
+.card-responsive {
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+@media (max-width: 768px) {
+  .card-responsive {
+    border-radius: 8px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .card-responsive {
+    border-radius: 6px;
+    padding: 12px;
+  }
+}
+
+/* ========== 按钮适配 ========== */
+.btn-responsive {
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .btn-responsive {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .btn-responsive {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+}
+
+/* ========== 网格布局适配 ========== */
+.grid-responsive-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .grid-responsive-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-responsive-4 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.grid-responsive-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .grid-responsive-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .grid-responsive-3 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.grid-responsive-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .grid-responsive-2 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* ========== Flex布局适配 ========== */
+.flex-responsive {
+  display: flex;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .flex-responsive {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* ========== 表格适配 ========== */
+@media (max-width: 768px) {
+  .el-table {
+    font-size: 13px;
+  }
+  
+  .el-table th,
+  .el-table td {
+    padding: 8px 4px;
+  }
+  
+  .el-table__header-wrapper {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .el-table {
+    font-size: 12px;
+  }
+  
+  .el-table th,
+  .el-table td {
+    padding: 6px 2px;
+  }
+}
+
+/* ========== 表单适配 ========== */
+@media (max-width: 768px) {
+  .el-form-item__label {
+    font-size: 14px;
+  }
+  
+  .el-input__inner {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .el-form-item__label {
+    font-size: 13px;
+  }
+  
+  .el-input__inner {
+    font-size: 13px;
+  }
+}
+
+/* ========== 对话框适配 ========== */
+@media (max-width: 768px) {
+  .el-dialog {
+    width: 90% !important;
+    margin-top: 5vh !important;
+  }
+  
+  .el-dialog__body {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .el-dialog {
+    width: 95% !important;
+  }
+  
+  .el-dialog__body {
+    padding: 16px;
+  }
+  
+  .el-dialog__title {
+    font-size: 16px;
+  }
+}
+
+/* ========== 横屏模式优化 ========== */
+@media (max-height: 600px) and (orientation: landscape) {
+  .el-dialog {
+    margin-top: 2vh !important;
+  }
+  
+  .el-dialog__body {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
+
+/* ========== 触摸友好 ========== */
+@media (hover: none) and (pointer: coarse) {
+  /* 移动设备触摸优化 */
+  button,
+  .el-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ========== 图片响应式 ========== */
+.img-responsive {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ========== 视频响应式 ========== */
+.video-responsive {
+  position: relative;
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  overflow: hidden;
+}
+
+.video-responsive iframe,
+.video-responsive video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}

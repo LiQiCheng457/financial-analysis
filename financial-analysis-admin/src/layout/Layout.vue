@@ -1,6 +1,7 @@
 <template>
   <el-container class="layout-container">
-    <el-aside width="200px">
+    <!-- 桌面端固定侧边栏 -->
+    <el-aside width="200px" class="desktop-sidebar">
       <el-scrollbar>
         <el-menu :default-openeds="defaultOpeneds" router>
           <template v-for="item in menu" :key="item.key">
@@ -28,9 +29,54 @@
       </el-scrollbar>
     </el-aside>
 
+    <!-- 移动端抽屉式侧边栏 -->
+    <el-drawer
+      v-model="mobileMenuVisible"
+      direction="ltr"
+      :size="260"
+      class="mobile-drawer"
+      :with-header="false"
+    >
+      <el-scrollbar>
+        <el-menu :default-openeds="defaultOpeneds" router @select="handleMobileMenuSelect">
+          <template v-for="item in menu" :key="item.key">
+            <el-sub-menu v-if="item.children && item.children.length" :index="item.key">
+              <template #title>
+                <el-icon>
+                  <component :is="getIconComponent(item.icon)" />
+                </el-icon>
+                {{ item.title }}
+              </template>
+
+              <el-menu-item v-for="child in item.children" :key="child.key" :index="child.path">
+                {{ child.title }}
+              </el-menu-item>
+            </el-sub-menu>
+
+            <el-menu-item v-else :index="item.path">
+              <el-icon>
+                <component :is="getIconComponent(item.icon)" />
+              </el-icon>
+              <span>{{ item.title }}</span>
+            </el-menu-item>
+          </template>
+        </el-menu>
+      </el-scrollbar>
+    </el-drawer>
+
     <el-container>
       <el-header style="text-align: right; font-size: 12px">
         <div class="toolbar">
+          <!-- 移动端汉堡菜单按钮 -->
+          <el-button 
+            class="mobile-menu-btn" 
+            :icon="Menu" 
+            circle 
+            @click="toggleMobileMenu"
+          />
+          
+          <div class="spacer"></div>
+          
           <UserAvatar />
           <div class="user-info-section">
             <span class="username">{{ username }}</span>
@@ -66,6 +112,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import * as Icons from '@element-plus/icons-vue'
+import { Menu } from '@element-plus/icons-vue'
 import menuConfig from '@/config/menu'
 import ICON_MAP from '@/config/icon-map'
 import { useAuthStore } from '@/store/auth'
@@ -77,6 +124,18 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 const username = computed(() => authStore.user?.username || '未登录')
+
+// 移动端菜单状态
+const mobileMenuVisible = ref(false)
+
+const toggleMobileMenu = () => {
+  mobileMenuVisible.value = !mobileMenuVisible.value
+}
+
+const handleMobileMenuSelect = () => {
+  // 选择菜单项后自动关闭抽屉
+  mobileMenuVisible.value = false
+}
 
 const handleLogout = () => {
   authStore.logout()
@@ -162,37 +221,85 @@ const menu = filteredMenu
   background: #f5f7fa;
 }
 
-.el-aside {
+/* 桌面端侧边栏 */
+.desktop-sidebar {
   background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   transition: width 0.3s ease;
 }
 
-.el-aside :deep(.el-menu) {
+.desktop-sidebar :deep(.el-menu) {
   background: transparent;
   border-right: none;
 }
 
-.el-aside :deep(.el-menu-item),
-.el-aside :deep(.el-sub-menu__title) {
+.desktop-sidebar :deep(.el-menu-item),
+.desktop-sidebar :deep(.el-sub-menu__title) {
   color: rgba(255, 255, 255, 0.8);
   transition: all 0.3s ease;
 }
 
-.el-aside :deep(.el-menu-item:hover),
-.el-aside :deep(.el-sub-menu__title:hover) {
+.desktop-sidebar :deep(.el-menu-item:hover),
+.desktop-sidebar :deep(.el-sub-menu__title:hover) {
   background: rgba(102, 126, 234, 0.2) !important;
   color: white;
 }
 
-.el-aside :deep(.el-menu-item.is-active) {
+.desktop-sidebar :deep(.el-menu-item.is-active) {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)) !important;
   color: white;
   border-left: 4px solid #fff;
 }
 
-.el-aside :deep(.el-sub-menu.is-active .el-sub-menu__title) {
+.desktop-sidebar :deep(.el-sub-menu.is-active .el-sub-menu__title) {
   color: white;
+}
+
+/* 移动端抽屉 */
+.mobile-drawer :deep(.el-drawer__body) {
+  padding: 0;
+  background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+}
+
+.mobile-drawer :deep(.el-menu) {
+  background: transparent;
+  border-right: none;
+}
+
+.mobile-drawer :deep(.el-menu-item),
+.mobile-drawer :deep(.el-sub-menu__title) {
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.mobile-drawer :deep(.el-menu-item:hover),
+.mobile-drawer :deep(.el-sub-menu__title:hover) {
+  background: rgba(102, 126, 234, 0.2) !important;
+  color: white;
+}
+
+.mobile-drawer :deep(.el-menu-item.is-active) {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)) !important;
+  color: white;
+  border-left: 4px solid #fff;
+}
+
+/* 移动端菜单按钮 */
+.mobile-menu-btn {
+  display: none;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+}
+
+.mobile-menu-btn:hover,
+.mobile-menu-btn:focus {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.spacer {
+  flex: 1;
 }
 
 .el-header {
@@ -211,6 +318,7 @@ const menu = filteredMenu
   align-items: center;
   gap: 16px;
   color: white;
+  width: 100%;
 }
 
 .user-info-section {
@@ -261,6 +369,105 @@ const menu = filteredMenu
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ========== 响应式布局 ========== */
+
+/* 平板适配 (768px - 1024px) */
+@media (max-width: 1024px) {
+  .el-header {
+    padding: 0 16px;
+  }
+  
+  .toolbar {
+    gap: 12px;
+  }
+  
+  .el-main {
+    padding: 16px;
+  }
+}
+
+/* 手机适配 (小于 768px) */
+@media (max-width: 768px) {
+  /* 隐藏桌面端侧边栏 */
+  .desktop-sidebar {
+    display: none !important;
+  }
+  
+  /* 显示移动端菜单按钮 */
+  .mobile-menu-btn {
+    display: inline-flex !important;
+  }
+  
+  .el-header {
+    padding: 0 12px;
+  }
+  
+  .toolbar {
+    gap: 8px;
+  }
+  
+  /* 隐藏用户名,只保留头像和下拉菜单 */
+  .username {
+    display: none;
+  }
+  
+  .role-tag {
+    display: none;
+  }
+  
+  .el-main {
+    padding: 12px;
+  }
+}
+
+/* 超小屏幕适配 (小于 480px) */
+@media (max-width: 480px) {
+  .el-header {
+    padding: 0 8px;
+    height: 50px;
+  }
+  
+  .toolbar {
+    gap: 6px;
+  }
+  
+  .toolbar :deep(.el-avatar) {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .toolbar :deep(.el-icon) {
+    font-size: 16px;
+  }
+  
+  .mobile-menu-btn {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  
+  .el-main {
+    padding: 8px;
+    min-height: calc(100vh - 50px);
+  }
+  
+  /* 抽屉宽度调整 */
+  .mobile-drawer :deep(.el-drawer) {
+    width: 80% !important;
+    max-width: 260px;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 600px) and (orientation: landscape) {
+  .el-header {
+    height: 50px;
+  }
+  
+  .el-main {
+    min-height: calc(100vh - 50px);
   }
 }
 </style>
